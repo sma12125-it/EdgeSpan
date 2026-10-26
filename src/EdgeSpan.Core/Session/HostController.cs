@@ -358,8 +358,14 @@ public sealed class HostController : IDisposable
             existing.SpanPx = incoming.SpanPx;
             existing.CornerSizePx = incoming.CornerSizePx;
             existing.PointerSpeed = incoming.PointerSpeed;
-            existing.ScreenWidth = incoming.ScreenWidth;
-            existing.ScreenHeight = incoming.ScreenHeight;
+            // The phone is the source of truth for its size (Hello/announce). The UI copy can be stale
+            // (old rotation, saved before the phone reported), and every auto-save used to write it back
+            // over the live size, so the host thought the phone was smaller and exited mid-screen.
+            if (existing.ScreenWidth <= 0 || existing.ScreenHeight <= 0)
+            {
+                existing.ScreenWidth = incoming.ScreenWidth;
+                existing.ScreenHeight = incoming.ScreenHeight;
+            }
             if (_links.TryGetValue(existing.Id, out var link) && IPAddress.TryParse(existing.Address, out var ip))
                 link.Remote = new IPEndPoint(ip, existing.Port);
             ReloadLayout();
@@ -479,6 +485,8 @@ public sealed class HostController : IDisposable
                 var link = Get(active);
                 if (transition is Transition.Return returned)
                 {
+                    var exitDev = Machine.Devices.FirstOrDefault(d => d.Id == active);
+                    _effects.Add(new Effect.Log($"edge-exit host device={active} edge={(returned.Through ? "through" : exitDev?.ReturnEdge.ToString())} at=({returned.DeviceX},{returned.DeviceY}) size={exitDev?.ScreenWidth}x{exitDev?.ScreenHeight} delta={rawDx},{rawDy} host=({returned.HostX},{returned.HostY})"));
                     _devicePoint[active] = (returned.DeviceX, returned.DeviceY);
                     _homeSaved = false;
                     if (link != null)
@@ -1317,18 +1325,29 @@ public sealed class HostController : IDisposable
                     if (caps != hello.Capabilities)
                         _effects.Add(new Effect.Log("handoff caps kept device=" + link.Config.Id));
                     link.PeerCaps = caps;
-                    if (hello.Width > 0) link.Config.ScreenWidth = hello.Width;
-                    if (hello.Height > 0) link.Config.ScreenHeight = hello.Height;
+                    var oldW = link.Config.ScreenWidth;
+                    var oldH = link.Config.ScreenHeight;
+                    // Ignore placeholder sizes (an Android display not measured yet reports 1x1).
+                    if (hello.Width > 16 && hello.Height > 16)
+                    {
+                        link.Config.ScreenWidth = hello.Width;
+                        link.Config.ScreenHeight = hello.Height;
+                    }
+                    if (oldW != link.Config.ScreenWidth || oldH != link.Config.ScreenHeight)
+                        _effects.Add(new Effect.Log($"device-size id={link.Config.Id} {oldW}x{oldH} -> {link.Config.ScreenWidth}x{link.Config.ScreenHeight}"));
                     if (!string.IsNullOrWhiteSpace(hello.Name)) link.Config.Name = hello.Name;
                     if (!string.IsNullOrWhiteSpace(hello.Id) && hello.Id != link.Config.Id)
                     {
                         // The id was agreed at pairing. Keep the link id stable.
                     }
                     ReloadLayout();
+                    if (Machine.ActiveDeviceId == link.Config.Id)
+                        Machine.ClampActive(); // rotation while in control: keep the pointer inside the new bounds
                     link.Status = "connected";
                     Touch();
                     break;
-                case SessionEvent.EdgeReturned when Machine.ActiveDeviceId == link.Config.Id:
+                case SessionEvent.EdgeReturned back when Machine.ActiveDeviceId == link.Config.Id:
+                    _effects.Add(new Effect.Log($"edge-exit device-reported device={link.Config.Id} at=({back.DeviceX},{back.DeviceY}) model=({Machine.X},{Machine.Y}) size={link.Config.ScreenWidth}x{link.Config.ScreenHeight}"));
                     ReturnToHost(link);
                     break;
                 case SessionEvent.ClipboardReceived clip when Settings.ClipboardShare && clip.Text != _lastClip:

@@ -19,9 +19,9 @@ android {
         // Accessibility gestures (dispatchGesture) exist from API 24.
         minSdk = 24
         targetSdk = 34
-        versionCode = 34
+        versionCode = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionName = "0.9.15"
+        versionName = "0.9.16"
         buildConfigField("String", "BUILD_DATE", "\"2026-10-25\"")
         buildConfigField("int", "PROTOCOL", "1")
         ndk {

@@ -6,8 +6,8 @@ public static class ProductInfo
     // Derived from <Version> in Directory.Build.props so the UI, diagnostics and installer never disagree.
     public static readonly string Version =
         (System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(ProductInfo).Assembly)
-            ?.InformationalVersion ?? "0.9.15").Split('+')[0];
-    public const int VersionCode = 34;
+            ?.InformationalVersion ?? "0.9.16").Split('+')[0];
+    public const int VersionCode = 35;
     public const string BuildDate = "2026-10-26";
     public const int ProtocolVersion = 1;
     public const int DiscoveryPort = 45454;

@@ -349,6 +349,16 @@ public sealed class EdgeMachine
             ForceReturn(OriginX + ScreenW / 2, OriginY + ScreenH / 2);
     }
 
+    /// <summary>Clamps the device pointer to the active device's current size (after a rotation).</summary>
+    public void ClampActive()
+    {
+        if (ActiveDeviceId == null || Find(ActiveDeviceId) is not { } d || d.ScreenWidth <= 0 || d.ScreenHeight <= 0)
+            return;
+        X = Clamp(X, 0, d.ScreenWidth - 1);
+        Y = Clamp(Y, 0, d.ScreenHeight - 1);
+        _subX = _subY = 0;
+    }
+
     public bool WouldEnter(int x, int y, out string deviceId)
     {
         deviceId = "";
