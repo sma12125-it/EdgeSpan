@@ -2,7 +2,7 @@
 ; after scripts/publish-windows.sh has produced publish\win-x64\EdgeSpan.exe.
 
 #define MyAppName "EdgeSpan"
-#define MyAppVersion "0.9.11"
+#define MyAppVersion "0.9.12"
 #define MyAppPublisher "EdgeSpan"
 #define MyAppExeName "EdgeSpan.exe"
 

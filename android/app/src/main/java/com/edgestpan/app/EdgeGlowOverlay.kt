@@ -51,9 +51,9 @@ class EdgeGlowOverlay(private val app: Context) {
     fun close() {
         running = false
         main.post {
-            glow?.animate()?.cancel()
-            removeGlow()
-            removeWatch()
+            runCatching { glow?.animate()?.cancel() }
+            runCatching { removeGlow() }
+            runCatching { removeWatch() }
         }
     }
 
@@ -69,6 +69,19 @@ class EdgeGlowOverlay(private val app: Context) {
     }
 
     private fun attach() {
+        try {
+            attachUnsafe()
+        } catch (thrown: Throwable) {
+            // BadTokenException, SecurityException (overlay permission revoked), a stale accessibility
+            // service token, or IllegalStateException from a view already added: drop the glow, keep the session.
+            CrashLog.caught(app, "glow attach", thrown)
+            runCatching { removeGlow() }
+            runCatching { removeWatch() }
+            host = null
+        }
+    }
+
+    private fun attachUnsafe() {
         if (!running) return
         val ctx = context() ?: return
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
@@ -102,6 +115,14 @@ class EdgeGlowOverlay(private val app: Context) {
     }
 
     private fun fadeOut() {
+        try {
+            fadeOutUnsafe()
+        } catch (thrown: Throwable) {
+            CrashLog.caught(app, "glow fade", thrown)
+        }
+    }
+
+    private fun fadeOutUnsafe() {
         val view = glow
         if (view == null || view.parent == null) {
             removeGlow()
@@ -170,8 +191,12 @@ class EdgeGlowOverlay(private val app: Context) {
         this.edge = edge
         running = true
         main.post {
-            attach()
-            glow?.burst(Motion.reduce(app))
+            try {
+                attach()
+                glow?.burst(Motion.reduce(app))
+            } catch (thrown: Throwable) {
+                CrashLog.caught(app, "glow ripple", thrown)
+            }
             main.postDelayed({ if (running) hide() }, 360)
         }
     }
@@ -219,6 +244,15 @@ class EdgeGlowOverlay(private val app: Context) {
         }
 
         override fun onDraw(canvas: Canvas) {
+            try {
+                drawGlow(canvas)
+            } catch (thrown: RuntimeException) {
+                android.util.Log.e("EdgeSpan", "glow draw", thrown)
+            }
+        }
+
+        private fun drawGlow(canvas: Canvas) {
+            if (width < 1 || height < 1) return
             val push = if (reduce) 0f else spring.value.toFloat().coerceIn(0f, 1f)
             val solid = Color.argb(200, 61, 220, 132)
             val clear = Color.argb(0, 61, 220, 132)

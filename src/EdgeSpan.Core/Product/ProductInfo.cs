@@ -3,7 +3,7 @@ namespace EdgeSpan.Product;
 public static class ProductInfo
 {
     public const string Name = "EdgeSpan";
-    public const string Version = "0.9.11";
+    public const string Version = "0.9.12";
     public const int VersionCode = 30;
     public const string BuildDate = "2026-10-25";
     public const int ProtocolVersion = 1;

@@ -41,11 +41,15 @@ class AdbInjector : Injector {
         hello[20] = 1
         write(1, hello)
         Thread({
-            val input = s.getInputStream()
-            val header = ByteArray(3)
-            while (!s.isClosed) {
-                if (input.read(header) < 3) break
-                if ((header[2].toInt() and 0xff) == 9) EdgeGlowOverlay.fingerFromServer()
+            try {
+                val input = s.getInputStream()
+                val header = ByteArray(3)
+                while (!s.isClosed) {
+                    if (input.read(header) < 3) break
+                    if ((header[2].toInt() and 0xff) == 9) EdgeGlowOverlay.fingerFromServer()
+                }
+            } catch (thrown: Throwable) {
+                android.util.Log.e("EdgeSpan", "finger reader", thrown)
             }
         }, "edgestpan-finger").apply { isDaemon = true }.start()
         true
@@ -92,8 +96,13 @@ class AdbInjector : Injector {
         frame[0] = body.size.toByte()
         frame[1] = (body.size shr 8).toByte()
         body.copyInto(frame, 2)
-        out?.write(frame)
-        out?.flush()
+        try {
+            out?.write(frame)
+            out?.flush()
+        } catch (thrown: java.io.IOException) {
+            android.util.Log.e("EdgeSpan", "adb write", thrown)
+            out = null
+        }
     }
 
     private fun i16(v: Int) = byteArrayOf(v.toByte(), (v shr 8).toByte())
@@ -130,7 +139,16 @@ class AccessInjector(private val service: AccessibilityService) : Injector {
     private var down = false
 
     override fun onEvent(event: ClientEvent) {
-        main.post { apply(event) }
+        main.post {
+            try {
+                apply(event)
+            } catch (thrown: Throwable) {
+                // A stale accessibility token (service restarted) throws BadTokenException here.
+                android.util.Log.e("EdgeSpan", "access inject ${event.javaClass.simpleName}", thrown)
+                if (event is ClientEvent.EdgeEntered) CrashLog.caught(service, "access cursor", thrown)
+                added = cursor.parent != null
+            }
+        }
     }
 
     private fun apply(event: ClientEvent) {
@@ -170,17 +188,18 @@ class AccessInjector(private val service: AccessibilityService) : Injector {
         EdgeGlowOverlay.coverBars(params)
         params.x = placed.first
         params.y = placed.second
-        if (!added) {
-            wm.addView(cursor, params)
+        val manager = wm ?: return
+        if (!added || cursor.parent == null) {
+            manager.addView(cursor, params)
             added = true
-        } else wm.updateViewLayout(cursor, params)
+        } else manager.updateViewLayout(cursor, params)
     }
 
     override fun hidePointer() = hide()
 
     private fun hide() {
         if (added) {
-            wm.removeView(cursor)
+            runCatching { wm?.removeView(cursor) }
             added = false
         }
     }
@@ -188,7 +207,8 @@ class AccessInjector(private val service: AccessibilityService) : Injector {
     private fun stroke(x1: Int, y1: Int, x2: Int, y2: Int, duration: Long) {
         val path = Path().apply { moveTo(x1.toFloat(), y1.toFloat()); lineTo(x2.toFloat(), y2.toFloat()) }
         val stroke = GestureDescription.StrokeDescription(path, 0, duration)
-        service.dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
+        runCatching { service.dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null) }
+            .onFailure { android.util.Log.e("EdgeSpan", "gesture", it) }
     }
 
     private fun swipe(x: Int, y: Int, dx: Int, dy: Int) {
@@ -206,7 +226,7 @@ class AccessInjector(private val service: AccessibilityService) : Injector {
 object ImeBridge {
     fun commit(text: String) {
         val ime = Input.current ?: return
-        ime.currentInputConnection?.commitText(text, 1)
+        runCatching { ime.currentInputConnection?.commitText(text, 1) }
     }
 }
 

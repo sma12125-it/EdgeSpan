@@ -24,7 +24,7 @@ Section "EdgeSpan"
   WriteRegStr HKCU "Software\EdgeSpan" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "DisplayName" "EdgeSpan"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "DisplayVersion" "0.9.11"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "DisplayVersion" "0.9.12"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "NoRepair" 1
 SectionEnd

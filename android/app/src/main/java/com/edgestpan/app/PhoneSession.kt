@@ -584,10 +584,14 @@ class PhoneSession(
                         Log.i(TAG, "edge-enter edge=${event.edge} x=${event.x} y=${event.y}")
                         glowState = GlowPolicy.enter(event.edge)
                         local = false
-                        if (Motion.breakthrough(context)) {
-                            glow.ripple(event.edge)
-                            cue()
-                        } else glow.hide()
+                        try {
+                            if (Motion.breakthrough(context)) {
+                                glow.ripple(event.edge)
+                                cue()
+                            } else glow.hide()
+                        } catch (thrown: Throwable) {
+                            CrashLog.caught(context, "edge-enter effects", thrown)
+                        }
                     }
                     is ClientEvent.EdgeReturned -> {
                         Log.i(TAG, "edge-return edge=${event.edge}")
@@ -628,7 +632,14 @@ class PhoneSession(
                     else -> Unit
                 }
                 if (local && now < quietUntil && event !is ClientEvent.EdgeEntered) return@onEvent
-                if (!local || event is ClientEvent.EdgeEntered || event is ClientEvent.Key) injector?.onEvent(event)
+                if (!local || event is ClientEvent.EdgeEntered || event is ClientEvent.Key) {
+                    try {
+                        injector?.onEvent(event)
+                    } catch (thrown: Throwable) {
+                        if (event is ClientEvent.EdgeEntered) CrashLog.caught(context, "edge-enter inject", thrown)
+                        else Log.e(TAG, "inject", thrown)
+                    }
+                }
             }
             val clips = context.getSystemService(android.content.ClipboardManager::class.java)
             clips?.addPrimaryClipChangedListener { ClipHub.onClipboardChanged() }

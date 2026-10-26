@@ -23,6 +23,7 @@ class SessionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        CrashLog.install(this)
         try {
             startForeground(7, notification(getString(R.string.notification_text)))
         } catch (thrown: Throwable) {
@@ -56,7 +57,7 @@ class SessionService : Service() {
             try {
                 PhoneSession(this, stop, this::report).run()
             } catch (thrown: Throwable) {
-                Log.e(PhoneSession.TAG, "uncaught", thrown)
+                CrashLog.caught(this, "session", thrown)
                 report("error", thrown.message ?: "Something went wrong while pairing.")
             } finally {
                 started.set(false)

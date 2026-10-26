@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        CrashLog.install(this)
         try {
             installSplashScreen()
         } catch (thrown: Throwable) {
@@ -226,12 +227,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun shareDiagnostics() {
-        val body = DiagFile.read(this).ifBlank { "EdgeSpan log is empty." }
+        val crash = CrashLog.read(this)
+        val diag = DiagFile.read(this)
+        val body = buildString {
+            if (crash.isNotBlank()) append("--- crash log ---\n").append(crash).append("\n")
+            if (diag.isNotBlank()) append("--- diagnostics ---\n").append(diag)
+        }.ifBlank { "EdgeSpan log is empty." }
         val send = Intent(Intent.ACTION_SEND)
             .setType("text/plain")
             .putExtra(Intent.EXTRA_SUBJECT, "EdgeSpan diagnostics")
             .putExtra(Intent.EXTRA_TEXT, body)
-        startActivity(Intent.createChooser(send, "EdgeSpan"))
+        try {
+            startActivity(Intent.createChooser(send, "EdgeSpan"))
+        } catch (thrown: Throwable) {
+            Log.e("EdgeSpan", "share log", thrown)
+        }
     }
 
     private fun choose(method: String) {

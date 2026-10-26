@@ -19,12 +19,17 @@ class EdgeAccessibility : AccessibilityService() {
     }
     override fun onInterrupt() = Unit
 
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        if (instance === this) instance = null
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
         if (instance === this) instance = null
         super.onDestroy()
     }
 
     companion object {
-        var instance: EdgeAccessibility? = null
+        @Volatile var instance: EdgeAccessibility? = null
     }
 }
