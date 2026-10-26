@@ -41,9 +41,19 @@ public sealed class UsbConductor
     /// <summary>How long the session may look disconnected before the USB setup is redone.</summary>
     public int ReconnectGraceMs { get; init; } = 4000;
 
+    /// <summary>Called when the cable is pulled or the link dies: drop the host link and tunnel clients.</summary>
+    public Action? Drop { get; init; }
+    /// <summary>How often the device list is re-read while connected (cable-pull watch).</summary>
+    public int WatchMs { get; init; } = 2000;
+    public const int MaxBackoffMs = 15000;
+
     public async Task Run(IAdbClient adb, CancellationToken token)
     {
         var lastConnected = long.MinValue;
+        string? active = null;
+        var wasConnected = false;
+        var backoff = 1000;
+        var lastWatch = Environment.TickCount64;
         while (!token.IsCancellationRequested)
         {
             try
@@ -51,36 +61,70 @@ public sealed class UsbConductor
                 if (IsConnected())
                 {
                     lastConnected = Environment.TickCount64;
+                    if (!wasConnected)
+                        Note("usb-connected " + (active ?? ""));
+                    wasConnected = true;
+                    backoff = 1000;
+                    _retrying = false;
                     Phase("connected", "pairOkUsb");
+                    if (active != null && Environment.TickCount64 - lastWatch >= WatchMs)
+                    {
+                        lastWatch = Environment.TickCount64;
+                        if (!await StillAttached(adb, active, token))
+                        {
+                            await Lost(adb, active, "usb-device-removed", token);
+                            active = null;
+                            wasConnected = false;
+                            lastConnected = long.MinValue;
+                            continue;
+                        }
+                    }
                     await Pause(1000, token);
                     continue;
                 }
-                // A short blip of IsConnected() must not rerun the setup: StartInjection used to
-                // kill and restart the injection server, which silently broke the phone's socket
-                // to it and left "control on Android" with no cursor and no input.
-                if (lastConnected != long.MinValue && Environment.TickCount64 - lastConnected < ReconnectGraceMs)
+                if (wasConnected)
                 {
+                    // Link dropped. If the cable is gone, skip the grace and tear down right away.
+                    var attached = active != null && await StillAttached(adb, active, token);
+                    if (!attached || Environment.TickCount64 - lastConnected >= ReconnectGraceMs)
+                    {
+                        await Lost(adb, active, attached ? "usb-link-lost" : "usb-device-removed", token);
+                        active = null;
+                        wasConnected = false;
+                        lastConnected = long.MinValue;
+                        continue;
+                    }
+                    // A short blip of IsConnected() must not rerun the setup: StartInjection used to
+                    // kill and restart the injection server, which silently broke the phone's socket.
                     await Pause(500, token);
                     continue;
                 }
                 var serial = await Prepare(adb, token);
                 if (serial == null)
                 {
-                    await Pause(2000, token);
+                    await Backoff(ref backoff, token);
                     continue;
                 }
+                Note("usb-setup " + serial);
                 if (!await OpenTunnel(adb, serial, token))
                 {
-                    await Pause(2000, token);
+                    await Backoff(ref backoff, token);
                     continue;
                 }
+                active = serial;
+                lastWatch = Environment.TickCount64;
                 await StartInjection(adb, serial, token);
                 await EnableAccess(adb, serial, token);
                 await LaunchPhone(adb, serial, token);
                 if (await WaitForPhone(token))
+                {
+                    wasConnected = true;
+                    lastConnected = Environment.TickCount64;
                     continue;
+                }
                 Phase("failed", "usbJoinTimeout");
-                await Pause(2000, token);
+                Note("usb-join-timeout");
+                await Backoff(ref backoff, token);
             }
             catch (OperationCanceledException)
             {
@@ -89,20 +133,54 @@ public sealed class UsbConductor
         }
     }
 
+    private async Task<bool> StillAttached(IAdbClient adb, string serial, CancellationToken token)
+    {
+        var listed = await Devices(adb, token);
+        if (listed.NeedsRestart)
+            return true; // can't tell; don't tear down on an adb hiccup
+        return AdbText.Parse(listed.Text).Any(d => d.Serial == serial && d.State == "device");
+    }
+
+    private async Task Lost(IAdbClient adb, string? serial, string why, CancellationToken token)
+    {
+        Note(why + " " + (serial ?? ""));
+        Phase("disconnected", "usbDisconnected");
+        try { Drop?.Invoke(); } catch (Exception ex) { Note("usb-drop-error " + ex.Message); }
+        Inject?.Invoke("injectDown");
+        if (serial != null)
+        {
+            await RemoveRules(adb, serial, token);
+            Note("usb-teardown " + serial);
+        }
+        _retrying = true;
+        Phase("reconnecting", "usbReconnecting");
+    }
+
+    private bool _retrying;
+    private string Busy(string phase) => _retrying ? "reconnecting" : phase;
+
+    private Task Backoff(ref int backoff, CancellationToken token)
+    {
+        var wait = backoff;
+        backoff = Math.Min(backoff * 2, MaxBackoffMs);
+        Note("usb-retry-in " + wait + "ms");
+        return Pause(wait, token);
+    }
+
     private async Task<string?> Prepare(IAdbClient adb, CancellationToken token)
     {
-        Phase("searching", "usbStepAdb");
+        Phase(Busy("searching"), "usbStepAdb");
         var started = await Call(adb, token, "start-server");
         if (started.NeedsRestart)
         {
-            Phase("searching", "usbAdbRestart");
+            Phase(Busy("searching"), "usbAdbRestart");
             await Restart(adb, token);
         }
-        Phase("searching", "usbSearching");
+        Phase(Busy("searching"), "usbSearching");
         var listed = await Devices(adb, token);
         if (listed.NeedsRestart)
         {
-            Phase("searching", "usbAdbRestart");
+            Phase(Busy("searching"), "usbAdbRestart");
             await Restart(adb, token);
             listed = await Devices(adb, token);
         }
@@ -145,12 +223,12 @@ public sealed class UsbConductor
 
     private async Task<bool> OpenTunnel(IAdbClient adb, string serial, CancellationToken token)
     {
-        Phase("connecting", "usbStepReverse");
+        Phase(Busy("connecting"), "usbStepReverse");
         await RemoveRules(adb, serial, token);
         var reverse = await Reverse(adb, serial, token);
         if (reverse.Code != 0 || reverse.NeedsRestart)
         {
-            Phase("searching", "usbAdbRestart");
+            Phase(Busy("searching"), "usbAdbRestart");
             await Restart(adb, token);
             await RemoveRules(adb, serial, token);
             reverse = await Reverse(adb, serial, token);
@@ -164,7 +242,7 @@ public sealed class UsbConductor
         Note("usb-reverse " + serial);
         var video = await Call(adb, token, "-s", serial, "reverse", "tcp:" + Product.ProductInfo.HandoffPort, "tcp:" + Product.ProductInfo.HandoffPort);
         Note(video.Code == 0 && !video.TimedOut ? "usb-video-reverse" : "usb-video-reverse-failed " + First(video.Text));
-        Phase("connecting", "usbStepForward");
+        Phase(Busy("connecting"), "usbStepForward");
         var forward = await Call(adb, token, "-s", serial, "forward", "tcp:" + Product.ProductInfo.AdbServerPort, "tcp:" + Product.ProductInfo.AdbServerPort);
         if (forward.Code != 0 || forward.TimedOut)
             Note("usb-forward-failed " + First(forward.Text));
@@ -173,7 +251,7 @@ public sealed class UsbConductor
 
     private async Task StartInjection(IAdbClient adb, string serial, CancellationToken token)
     {
-        Phase("connecting", "usbStepInject");
+        Phase(Busy("connecting"), "usbStepInject");
         if (!StartUhid)
         {
             Inject?.Invoke("injectDown");
@@ -253,7 +331,7 @@ public sealed class UsbConductor
 
     private async Task EnableAccess(IAdbClient adb, string serial, CancellationToken token)
     {
-        Phase("connecting", "usbStepAccess");
+        Phase(Busy("connecting"), "usbStepAccess");
         var current = await Call(adb, token, "-s", serial, "shell", "settings", "get", "secure", "enabled_accessibility_services");
         var text = First(current.Text);
         if (text == "null")
@@ -278,7 +356,7 @@ public sealed class UsbConductor
 
     private async Task LaunchPhone(IAdbClient adb, string serial, CancellationToken token)
     {
-        Phase("connecting", "usbStepLaunch");
+        Phase(Busy("connecting"), "usbStepLaunch");
         if (!PairingOpen())
             OpenPairing();
         var pin = Pin();
@@ -300,7 +378,7 @@ public sealed class UsbConductor
 
     private async Task<bool> WaitForPhone(CancellationToken token)
     {
-        Phase("connecting", "usbStepWait");
+        Phase(Busy("connecting"), "usbStepWait");
         var until = Environment.TickCount64 + JoinTimeoutMs;
         while (!token.IsCancellationRequested && Environment.TickCount64 < until)
         {

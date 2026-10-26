@@ -12,6 +12,7 @@ public sealed class UsbHooks
     public required Action<string, string> Phase { get; init; }
     public Action<string>? Trace { get; init; }
     public Action<string>? Inject { get; init; }
+    public Action? Drop { get; init; }
 }
 
 /// <summary>Finds a phone with the bundled adb, then tunnels the session and the injection server.</summary>
@@ -43,6 +44,7 @@ public sealed class UsbLink : IDisposable
                 Phase = hooks.Phase,
                 Trace = hooks.Trace,
                 Inject = hooks.Inject,
+                Drop = hooks.Drop,
                 DexPath = FindServer,
                 StartUhid = !string.Equals(Environment.GetEnvironmentVariable("EDGESPAN_NO_UHID"), "1", StringComparison.Ordinal),
                 PreferSerial = Environment.GetEnvironmentVariable("EDGESPAN_ADB_SERIAL")

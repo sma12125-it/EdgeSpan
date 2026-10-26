@@ -249,6 +249,8 @@
   "usbAdbTimeout": {"en": "adb did not answer in time. Trying again.", "fa": "adb به‌موقع جواب نداد. دوباره تلاش می‌شود."},
   "usbReverseFail": {"en": "The USB tunnel did not open. Check the cable and the USB debugging prompt.", "fa": "تونل USB باز نشد. کابل و پیام اشکال‌زدایی USB را بررسی کنید."},
   "usbJoinTimeout": {"en": "The phone did not join the tunnel. Trying again.", "fa": "گوشی به تونل نپیوست. دوباره تلاش می‌شود."},
+  "usbDisconnected": {"en": "Disconnected — USB cable removed or link lost.", "fa": "قطع شد — کابل USB جدا شد یا اتصال از دست رفت."},
+  "usbReconnecting": {"en": "Reconnecting over USB…", "fa": "در حال اتصال دوباره از طریق USB…"},
   "usbAdbRestart": {"en": "Restarting adb…", "fa": "در حال راه‌اندازی دوباره adb…"},
   "usbPortBusy": {"en": "Port 45455 is already in use. Close the other EdgeSpan window and try again.", "fa": "درگاه ۴۵۴۵۵ اشغال است. پنجره دیگر اج‌اسپن را ببندید و دوباره تلاش کنید."},
   "openSamsungDriver": {"en": "Open the Samsung driver page", "fa": "باز کردن صفحه درایور سامسونگ"},

@@ -51,7 +51,7 @@ public sealed class LinkSketch : Control
         var failed = phase is "failed" or "needDebug" or "unauthorized" or "offline";
         var connected = phase == "connected";
         var accent = connected ? Color.Parse("#2EE6C0") : failed ? Color.Parse("#F0B429") : Color.Parse("#8EB6E3");
-        var pulse = phase is "searching" or "connecting" ? 0.45 + 0.55 * (0.5 + 0.5 * Math.Sin(_t * 2)) : 1;
+        var pulse = phase is "searching" or "connecting" or "reconnecting" ? 0.45 + 0.55 * (0.5 + 0.5 * Math.Sin(_t * 2)) : 1;
         var link = new SolidColorBrush(Color.FromArgb((byte)(255 * pulse), accent.R, accent.G, accent.B));
         var blue = new SolidColorBrush(Color.Parse("#174A8B"));
         var stroke = new Pen(Brushes.White, 2.2, lineCap: PenLineCap.Round);
@@ -128,7 +128,7 @@ public sealed class LinkSketch : Control
     }
 
     private IDashStyle? Dash(string phase) =>
-        phase is "connecting" or "searching" ? new DashStyle(new double[] { 5, 6 }, _t * 12) : null;
+        phase is "connecting" or "searching" or "reconnecting" ? new DashStyle(new double[] { 5, 6 }, _t * 12) : null;
 
     private static Point Cubic(Point a, Point b, Point c, Point d, double t)
     {

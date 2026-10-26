@@ -159,7 +159,13 @@ public sealed class SessionRuntime : IDisposable
             Pin = () => Host.CurrentPin,
             Phase = SetPhase,
             Trace = Trace,
-            Inject = note => InjectNote = note
+            Inject = note => InjectNote = note,
+            Drop = () =>
+            {
+                Trace("usb-drop: links + tunnel clients");
+                Host.DropLoopbackLinks();
+                _tunnel?.DropClients();
+            }
         });
     }
 
@@ -235,10 +241,12 @@ public sealed class SessionRuntime : IDisposable
 
     private bool IsUsbConnected()
     {
-        var snap = Host.SnapshotDevices().FirstOrDefault(d => d.Status is "paired" or "connected");
+        var snap = Host.SnapshotDevices().FirstOrDefault(d => d.Status == "connected");
         if (snap == null || _tunnel == null)
             return false;
-        return _tunnel.Owns(snap.Address, snap.Port) || _tunnel.HasClient;
+        // A live tunnel client is required: after an unplug the old check stayed true on a stale
+        // "paired" status, so the conductor never redid the setup.
+        return _tunnel.HasClient;
     }
 
     public void NotifySettingsChanged()

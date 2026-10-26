@@ -82,6 +82,19 @@ public sealed class TcpTunnel : IDisposable
 
     private void Raise(IPEndPoint from, byte[] payload) => Received?.Invoke(from, payload);
 
+    /// <summary>Closes every client (used after a USB unplug so a half-open adb socket can't linger).</summary>
+    public void DropClients()
+    {
+        List<Client> all;
+        lock (_gate)
+        {
+            all = new List<Client>(_clients.Values);
+            _clients.Clear();
+        }
+        foreach (var c in all)
+            c.Dispose();
+    }
+
     private void Remove(IPEndPoint remote)
     {
         lock (_gate)

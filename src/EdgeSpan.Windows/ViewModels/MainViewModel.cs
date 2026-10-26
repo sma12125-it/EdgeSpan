@@ -756,6 +756,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             "connected" => Catalog.Get(lang, "connectedTitle"),
             "connecting" => Catalog.Get(lang, "usbConnecting"),
+            "disconnected" => Catalog.Get(lang, "usbDisconnected"),
+            "reconnecting" => Catalog.Get(lang, "usbReconnecting"),
             "needDebug" => Catalog.Get(lang, "usbNeedDebug"),
             "unauthorized" => Catalog.Get(lang, "usbUnauthorized"),
             "offline" => Catalog.Get(lang, "usbOffline"),

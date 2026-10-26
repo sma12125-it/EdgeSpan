@@ -123,6 +123,68 @@ public class UsbSetupTests
         Assert.DoesNotContain(adb.Calls, c => c.Contains("reverse tcp:"));
     }
 
+    [Fact]
+    public async Task Unplug_tears_down_and_reconnects_without_the_grace_lockout()
+    {
+        var plugged = true;
+        var launched = false;
+        var connects = 0;
+        var drops = 0;
+        var adb = new ScriptAdb(args =>
+        {
+            var line = string.Join(" ", args);
+            if (line == "devices")
+                return new AdbCall(0, plugged ? "List of devices attached\nR58M\tdevice\n" : "List of devices attached\n", false);
+            return new AdbCall(0, line.Contains("cat ") ? "edgestpan-server mouse-relative 27183 uhid=true\n" : "", false);
+        });
+        var hooks = new Probe();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        string? last = null;
+        await new UsbConductor
+        {
+            IsConnected = () => launched && plugged,
+            PairingOpen = () => false,
+            OpenPairing = () => { },
+            Pin = () => "445566",
+            WatchMs = 50,
+            ReconnectGraceMs = 60000, // must not block reconnect after a real unplug
+            Drop = () =>
+            {
+                drops++;
+                launched = false;
+                plugged = true; // cable goes back in right away
+            },
+            Phase = (phase, detail) =>
+            {
+                hooks.Mark(phase, detail);
+                if (phase == "connected" && last != "connected")
+                {
+                    connects++;
+                    if (connects == 1)
+                        plugged = false; // pull the cable
+                    else
+                        cts.Cancel();
+                }
+                last = phase;
+            },
+            Trace = line =>
+            {
+                hooks.Log(line);
+                if (line.StartsWith("usb-launch ", StringComparison.Ordinal))
+                    launched = true;
+            },
+            Inject = note => hooks.InjectNote = note,
+            DexPath = () => Path.GetTempFileName()
+        }.Run(adb, cts.Token);
+        Assert.Equal(2, connects);
+        Assert.Equal(1, drops);
+        Assert.Contains(hooks.Phases, p => p.Phase == "disconnected");
+        Assert.Contains(hooks.Phases, p => p.Phase == "reconnecting");
+        Assert.Contains(hooks.Lines, l => l.StartsWith("usb-device-removed", StringComparison.Ordinal));
+        Assert.Contains(hooks.Lines, l => l.StartsWith("usb-teardown", StringComparison.Ordinal));
+        Assert.Equal(2, adb.Calls.Count(c => c.Contains("reverse tcp:45455 tcp:45455")));
+    }
+
     private static async Task RunOnce(ScriptAdb adb, Probe hooks)
     {
         var launched = false;

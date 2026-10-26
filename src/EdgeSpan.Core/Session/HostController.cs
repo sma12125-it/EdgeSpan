@@ -129,6 +129,8 @@ public sealed class HostController : IDisposable
     }
 
     public AppSettings Settings { get; }
+    /// <summary>Raised (under the host lock) when a connected link stops answering pings.</summary>
+    public Action<string>? LinkLost { get; set; }
     public EdgeMachine Machine { get; } = new();
     public string CurrentPin { get; private set; } = "";
     public string PairingUri { get; private set; } = "";
@@ -865,6 +867,26 @@ public sealed class HostController : IDisposable
         }
     }
 
+    /// <summary>Marks every loopback (USB-tunnelled) link disconnected so a fresh session can replace it.</summary>
+    public void DropLoopbackLinks()
+    {
+        lock (_gate)
+        {
+            foreach (var link in _links.Values)
+            {
+                var addr = link.Remote?.Address.ToString() ?? link.Config.Address ?? "";
+                if (!(addr.Contains("127.0.0.1") || addr.Contains("::1")) || link.Status is not ("connected" or "paired"))
+                    continue;
+                link.Status = "disconnected";
+                if (Machine.ActiveDeviceId == link.Config.Id)
+                    ReturnToHost(link);
+                else
+                    ReleaseModifiers(link, includeHeldKeys: true);
+            }
+            Touch();
+        }
+    }
+
     public void Tick(long nowMs)
     {
         lock (_gate)
@@ -879,6 +901,20 @@ public sealed class HostController : IDisposable
             {
                 if (link.Session == null)
                     continue;
+                // Liveness: the host pings every HeartbeatMs and the phone answers. A cable pull (adb reverse
+                // half-open socket) used to leave the link "connected" forever, so the USB conductor never redid
+                // the setup and only an app restart recovered. Mark it disconnected so reconnect can start.
+                if (_options.HeartbeatMs > 0 && link.Status == "connected" && link.LastRx > 0
+                    && nowMs - link.LastRx > Math.Max(5000, _options.HeartbeatMs * 5))
+                {
+                    link.Status = "disconnected";
+                    LinkLost?.Invoke(link.Config.Id);
+                    if (Machine.ActiveDeviceId == link.Config.Id)
+                        ReturnToHost(link);
+                    else
+                        ReleaseModifiers(link, includeHeldKeys: true);
+                    Touch();
+                }
                 foreach (var packet in link.Session.Poll(nowMs))
                     Enqueue(link, packet);
                 if (link.Punch != null && link.Path == LinkChoice.Pending)

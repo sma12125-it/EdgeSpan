@@ -130,7 +130,21 @@ class PhoneSession(
     }
 
     private fun runUsb(prefs: android.content.SharedPreferences, strings: Map<String, String>, id: String, name: String, width: Int, height: Int) {
-        say(strings, "working", "usbSearching", "Looking for the computer over USB…")
+        var attempt = 0
+        while (!stop.get()) {
+            if (!runUsbOnce(prefs, strings, id, name, width, height, attempt > 0)) return
+            if (stop.get()) return
+            attempt++
+            Log.i(TAG, "usb-reconnect attempt $attempt")
+            say(strings, "working", "usbReconnecting", "Reconnecting over USB…")
+            val wait = minOf(1_000L shl minOf(attempt - 1, 4), 15_000L)
+            try { Thread.sleep(wait) } catch (_: InterruptedException) { return }
+        }
+    }
+
+    /** Returns true when a live session ran and then dropped (so the caller should reconnect). */
+    private fun runUsbOnce(prefs: android.content.SharedPreferences, strings: Map<String, String>, id: String, name: String, width: Int, height: Int, again: Boolean): Boolean {
+        if (!again) say(strings, "working", "usbSearching", "Looking for the computer over USB…")
         var live: Live? = null
         val deadline = SystemClock.elapsedRealtime() + 45_000
         while (SystemClock.elapsedRealtime() < deadline && !stop.get()) {
@@ -150,9 +164,10 @@ class PhoneSession(
         }
         if (live == null) {
             say(strings, "error", failureKey, strings[failureKey] ?: failureText)
-            return
+            return again // keep retrying (with backoff) only after a drop; first-time failures surface as before
         }
         finishLive(live, strings, "usb", width, height)
+        return true
     }
 
     private fun finishLive(live: Live?, strings: Map<String, String>, method: String, width: Int, height: Int) {
@@ -660,7 +675,20 @@ class PhoneSession(
             }
             val clips = context.getSystemService(android.content.ClipboardManager::class.java)
             clips?.addPrimaryClipChangedListener { ClipHub.onClipboardChanged() }
+            var lastHeard = SystemClock.elapsedRealtime()
             while (!stop.get()) {
+                // The host pings every second. After a cable pull the socket can stay half-open, so
+                // treat 6 s of silence as a lost link and leave the pump; runUsb then reconnects.
+                if (SystemClock.elapsedRealtime() - lastHeard > 6_000) {
+                    Log.w(TAG, "link-lost $method: no packets for 6 s")
+                    if (engine.hasControl) {
+                        local = true
+                        engine.releaseControl()
+                    }
+                    glow.hide()
+                    injector.hidePointer()
+                    break
+                }
                 noPath.getAndSet(null)?.let { reason ->
                     // No working injection path: never pretend we have control.
                     InjectAlert.show(context, reason)
@@ -690,6 +718,7 @@ class PhoneSession(
                 val incoming = poll(40)
                 if (incoming != null) {
                     val seen = SystemClock.elapsedRealtime()
+                    lastHeard = seen
                     if (sentAt > 0) {
                         val dt = seen - sentAt
                         if (dt in 1..2000) {
