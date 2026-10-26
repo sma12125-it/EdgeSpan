@@ -110,6 +110,7 @@ class DelayMeter(private val windowMs: Long = 8_000) {
     private var worst = 0L
     private var frames = 0
     private var lastReport = 0L
+    private var started = false
 
     /** Returns delay ms for a report when one is due (every second), else null. */
     fun add(nowMs: Long, nowUs: Long, captureUs: Long): Int? {
@@ -118,7 +119,7 @@ class DelayMeter(private val windowMs: Long = 8_000) {
         val q = (d - base) / 1000
         if (q > worst) worst = q
         frames++
-        if (lastReport == 0L) lastReport = nowMs
+        if (!started) { started = true; lastReport = nowMs }
         if (nowMs - lastReport < 1000) return null
         val out = worst.coerceIn(0, 0xFFFF).toInt()
         worst = 0; frames = 0; lastReport = nowMs
