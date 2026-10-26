@@ -133,6 +133,7 @@ public sealed class SessionRuntime : IDisposable
         Host.DragProbe = () => _handoff.ProbeDrag();
         Host.DragHandoff = (device, edge) => _handoff.BeginDragHandoff(device, edge, ActiveMethod);
         Host.DragFailed = () => _handoff.CancelDrag();
+        Host.SendWindowHotkey = () => Dispatcher.UIThread.Post(() => _handoff.SendForeground(ActiveMethod, useLast: false));
         _handoff.ApplySettings();
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _timer.Tick += (_, _) => Pump();
@@ -393,8 +394,12 @@ public sealed class SessionRuntime : IDisposable
     private static bool IsHandoffFailure(string key) => key is
         "handoffNeedTablet" or "handoffNoLink" or "handoffNoEncoder" or "handoffBlack" or "handoffPcOff" or "handoffNoHwnd";
 
+    /// <summary>Tray "Send window to tablet": uses the last window that was in front before the tray took focus.</summary>
+    public void SendWindowToTablet() => _handoff.SendForeground(ActiveMethod, useLast: true);
+
     private void Pump()
     {
+        _handoff.NoteForeground();
         var now = Environment.TickCount64;
         var settings = Host.Settings;
         for (var budget = WirePressure.InboxPerPump; budget > 0 && _ingress.TryTake(out var from, out var data, out var relayPeer); budget--)

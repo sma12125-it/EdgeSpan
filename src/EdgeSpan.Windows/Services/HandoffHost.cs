@@ -97,7 +97,10 @@ public sealed class HandoffHost : IDisposable
         }
         if (!OperatingSystem.IsWindows())
             return;
-        SetWindowPos(job.Hwnd, IntPtr.Zero, 0, 0, job.ViewW, job.ViewH, 0x0002 | 0x0004 | 0x0010);
+        var dpi = (int)GetDpiForWindow(job.Hwnd);
+        var (w, h) = HandoffPolicy.WindowSize(geometry.PhysW, geometry.PhysH, geometry.DipW, geometry.DipH, dpi);
+        DiagLog.Write($"handoff geometry phys={geometry.PhysW}x{geometry.PhysH} dip={geometry.DipW}x{geometry.DipH} pcDpi={dpi} window={w}x{h}");
+        SetWindowPos(job.Hwnd, IntPtr.Zero, 0, 0, w, h, 0x0002 | 0x0004 | 0x0010);
     }
 
     public void OnState(Effect.HandoffState state)
@@ -119,6 +122,21 @@ public sealed class HandoffHost : IDisposable
 
     public void OnVideo(Effect.HandoffVideo video)
     {
+        var config = new HandoffPayloads.VideoConfig(video.Id, video.Bitrate, video.Fps, video.Idr);
+        if (HandoffPayloads.IsStats(config))
+        {
+            lock (_gate)
+            {
+                if (!_jobs.TryGetValue(video.Id, out var j))
+                    return;
+                var preset = HandoffPolicy.Bitrate(Math.Max(2, j.ViewW), Math.Max(2, j.ViewH), _host.Settings.HandoffQuality);
+                var next = HandoffPolicy.NextCap(j.BitrateCap, preset, HandoffPayloads.StatsDelayMs(config), HandoffPayloads.StatsDropped(config));
+                if (next != j.BitrateCap)
+                    DiagLog.Write($"handoff abr delay={HandoffPayloads.StatsDelayMs(config)}ms drop={HandoffPayloads.StatsDropped(config)} cap {j.BitrateCap} -> {next}");
+                j.BitrateCap = next;
+            }
+            return;
+        }
         if (!video.Idr)
             return;
         lock (_gate)
@@ -222,13 +240,23 @@ public sealed class HandoffHost : IDisposable
     {
         try
         {
-            _listener = new TcpListener(IPAddress.Loopback, ProductInfo.HandoffPort);
+            // Any interface so Wi-Fi tablets can reach it; only loopback (adb tunnel) or a paired
+            // device's own address is accepted, and every frame is encrypted with the pairing key anyway.
+            _listener = new TcpListener(IPAddress.Any, ProductInfo.HandoffPort);
             _listener.Start();
             while (_running)
             {
                 if (_listener.Pending())
                 {
                     var client = _listener.AcceptTcpClient();
+                    var peer = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
+                    if (peer == null || !(IPAddress.IsLoopback(peer) || _host.IsPairedAddress(peer)))
+                    {
+                        DiagLog.Write($"handoff video rejected {peer}");
+                        client.Close();
+                        continue;
+                    }
+                    DiagLog.Write($"handoff video connected {(IPAddress.IsLoopback(peer) ? "usb" : "wifi")} {peer}");
                     client.NoDelay = true;
                     client.SendBufferSize = 256 * 1024;
                     _video = client.GetStream();
@@ -308,7 +336,7 @@ public sealed class HandoffHost : IDisposable
             DiagLog.Write("handoff encoder " + keyName);
             if (IsCaptureFailure(keyName))
                 Finish(job, close: false);
-        });
+        }, () => job.BitrateCap);
         if (token.IsCancellationRequested || !_running)
             return;
         if (Volatile.Read(ref job.FramesSent) == 0)
@@ -346,6 +374,7 @@ public sealed class HandoffHost : IDisposable
 
     private void Finish(Job job, bool close, bool echo = true)
     {
+        PlaceholderCard.Close(job.Id);
         if (close && Volatile.Read(ref job.FramesSent) > 0)
         {
             if (Interlocked.CompareExchange(ref job.Restored, 1, 0) != 0)
@@ -421,8 +450,10 @@ public sealed class HandoffHost : IDisposable
         {
             ClientToScreen(hwnd, ref pt);
             var screen = (IntPtr)((pt.X & 0xFFFF) | ((pt.Y & 0xFFFF) << 16));
+            // Pinch arrives as a wheel with WheelCtrl: MK_CONTROL makes most apps zoom.
+            var keys = (input.Button & HandoffPayloads.WheelCtrl) != 0 ? 0x0008 : 0;
             if (input.WheelY != 0)
-                PostMessage(hwnd, 0x020A, (IntPtr)(input.WheelY << 16), screen);
+                PostMessage(hwnd, 0x020A, (IntPtr)((input.WheelY << 16) | keys), screen);
             if (input.WheelX != 0)
                 PostMessage(hwnd, 0x020E, (IntPtr)(input.WheelX << 16), screen);
             return;
@@ -468,6 +499,7 @@ public sealed class HandoffHost : IDisposable
         public volatile bool NeedIdr = true;
         public volatile bool LoggedNoStream;
         public int FramesSent;
+        public volatile int BitrateCap;
         public int Restored;
         public CancellationTokenSource? Stop;
         public Thread? Encoder;
@@ -519,7 +551,8 @@ public sealed class HandoffHost : IDisposable
             }
             hwnd = _dragHwnd;
         }
-        if (method is "lan" or "relay")
+        // USB and LAN/Wi-Fi have a direct socket for the video; a relay link does not.
+        if (method is "relay")
         {
             DiagLog.Write("handoff refused method=" + method);
             _host.ReleaseDrag(deviceId, "handoffNoLink");
@@ -593,6 +626,57 @@ public sealed class HandoffHost : IDisposable
             };
         }
         DiagLog.Write($"handoff parked id={id} {winW}x{winH} title={name}");
+        if (_host.Settings.HandoffPlaceholder)
+            PlaceholderCard.Show(id, home.Left, home.Top, winW, winH, dpi / 96.0, name,
+                EdgeSpan.Product.Catalog.Get(_host.Settings.Language, "handoffOnTablet"));
+    }
+
+    private nint _lastForeign;
+
+    /// <summary>Remembers the last foreground window that is not EdgeSpan, so the tray item can send it.</summary>
+    public void NoteForeground()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero)
+            return;
+        GetWindowThreadProcessId(fg, out var pid);
+        if (pid != (uint)Environment.ProcessId)
+            _lastForeign = fg;
+    }
+
+    /// <summary>
+    /// "Send to tablet": hands the foreground window (or the last non-EdgeSpan one) to the tablet without dragging.
+    /// Windows offers no supported way to add items to other apps' title-bar menus, so this is driven by a hotkey and the tray.
+    /// </summary>
+    public void SendForeground(string? method, bool useLast)
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        NoteForeground();
+        var hwnd = useLast ? _lastForeign : GetForegroundWindow();
+        if (hwnd != 0)
+        {
+            GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == (uint)Environment.ProcessId)
+                hwnd = 0;
+        }
+        var deviceId = _host.DeviceOnEdge(ScreenEdge.Right);
+        DiagLog.Write($"handoff send-window hwnd=0x{hwnd:X} device={deviceId ?? "none"} method={method}");
+        if (hwnd == 0 || deviceId == null)
+        {
+            NoteFailure(deviceId == null ? "handoffNeedTablet" : "handoffNoHwnd");
+            return;
+        }
+        var edge = ScreenEdge.Right;
+        var placed = _host.Settings.Devices.FirstOrDefault(d => d.Id == deviceId);
+        if (placed != null && Enum.TryParse<ScreenEdge>(placed.PcEdge, true, out var parsed))
+            edge = parsed;
+        lock (_gate)
+            _dragHwnd = hwnd;
+        BeginDragHandoff(deviceId, edge, method);
+        _keepDrag = false;
     }
 
     public void CancelDrag()

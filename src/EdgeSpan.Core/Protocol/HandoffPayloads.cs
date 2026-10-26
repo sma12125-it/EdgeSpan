@@ -22,6 +22,13 @@ public static class HandoffPayloads
     public const byte InputWheel = 3;
     public const byte InputKey = 4;
     public const byte InputText = 5;
+    /// <summary>Button field of a wheel input: hold Ctrl (pinch zoom).</summary>
+    public const byte WheelCtrl = 8;
+
+    /// <summary>A VideoConfig with fps 0 and a non-zero bitrate field is a receiver stats report.</summary>
+    public static bool IsStats(VideoConfig c) => c.Fps == 0 && c.Bitrate != 0 && !c.Idr;
+    public static int StatsDelayMs(VideoConfig c) => (int)(c.Bitrate & 0xFFFF);
+    public static int StatsDropped(VideoConfig c) => (int)((c.Bitrate >> 16) & 0x7FFF);
     public const byte StateFocused = 1;
     public const byte StateMinimized = 2;
     public const byte StateRestored = 3;

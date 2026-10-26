@@ -234,6 +234,7 @@ class PhoneSession(
         val live = Live(false, engine(id, name, width, height), { bytes ->
             socket.send(DatagramPacket(bytes, bytes.size, address, port))
         }, { timeout -> receive(socket, timeout) }, socket::close)
+        live.peerHost = { address.hostAddress }
         live.engine.startPairing(pin)
         return finish(live, timeoutMs)
     }
@@ -254,6 +255,7 @@ class PhoneSession(
                 }
             }
         }, { timeout -> receive(socket, timeout) }, socket::close)
+        live.peerHost = { lastFrom?.takeUnless { it.isLoopbackAddress }?.hostAddress }
         live.engine.startPairing(pin)
         return finish(live, 20_000)
     }
@@ -442,12 +444,15 @@ class PhoneSession(
         return found
     }
 
+    @Volatile private var lastFrom: InetAddress? = null
+
     private fun receive(socket: DatagramSocket, timeoutMs: Int): ByteArray? {
         socket.soTimeout = timeoutMs.coerceAtLeast(20)
         val buf = ByteArray(65535)
         val packet = DatagramPacket(buf, buf.size)
         return try {
             socket.receive(packet)
+            lastFrom = packet.address
             packet.data.copyOf(packet.length)
         } catch (_: SocketTimeoutException) {
             null
@@ -534,6 +539,8 @@ class PhoneSession(
         val poll: (Int) -> ByteArray?,
         val closeAction: () -> Unit
     ) {
+        /** LAN address of the PC for the encrypted window-video stream; null when unknown. */
+        var peerHost: () -> String? = { null }
         fun flush() {
             val copy = engine.out.toList()
             engine.out.clear()
@@ -596,9 +603,9 @@ class PhoneSession(
             glow.onFinger = { EdgeGlowOverlay.serverFinger() }
             engine.setHandoffPc(wantsHandoff(prefs))
             val lang = prefs.getString("lang", "en") ?: "en"
-            val viewer = HandoffViewer(context, engine, method, loadStrings(lang), { flush() }) { key ->
+            val viewer = HandoffViewer(context, engine, method, loadStrings(lang), { flush() }, { key ->
                 handoffFailed(prefs, lang, key)
-            }
+            }, { if (viaRelay) null else peerHost() })
             engine.onEvent = onEvent@{ event ->
                 pipe.onEvent(event)
                 val now = SystemClock.elapsedRealtime()

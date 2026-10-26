@@ -16,6 +16,7 @@ public sealed class App : Application
     private NativeMenuItem? _openItem;
     private NativeMenuItem? _switchItem;
     private NativeMenuItem? _quitItem;
+    private NativeMenuItem? _sendItem;
     private MainWindow? _window;
     private MainViewModel? _model;
 
@@ -46,6 +47,8 @@ public sealed class App : Application
         _openItem = new NativeMenuItem();
         _switchItem = new NativeMenuItem();
         _quitItem = new NativeMenuItem();
+        _sendItem = new NativeMenuItem();
+        _sendItem.Click += (_, _) => _model?.SendWindowToTablet();
         _openItem.Click += (_, _) => ShowWindow();
         _switchItem.Click += (_, _) => _model?.CycleCommand.Execute(null);
         _quitItem.Click += (_, _) =>
@@ -57,6 +60,7 @@ public sealed class App : Application
         var menu = new NativeMenu();
         menu.Add(_openItem);
         menu.Add(_switchItem);
+        menu.Add(_sendItem);
         menu.Add(_quitItem);
         _tray = new TrayIcon
         {
@@ -77,6 +81,11 @@ public sealed class App : Application
         _openItem.Header = _model.ShowWindowText;
         _switchItem.Header = _model.TraySwitchText;
         _quitItem.Header = _model.QuitText;
+        if (_sendItem != null)
+        {
+            _sendItem.Header = EdgeSpan.Product.Catalog.Format(_model.Host.Settings.Language, "traySendWindow", _model.Host.Settings.HotkeySendWindow);
+            _sendItem.IsVisible = EdgeSpan.Layout.HandoffPolicy.AllowsPcToPhone(_model.Host.Settings.Handoff);
+        }
     }
 
     private void ShowWindow()

@@ -161,9 +161,16 @@ class ClientEngine(
         post(PacketType.HandoffInput, HandoffPayloads.writeInput(id, HandoffPayloads.InputButton, x, y, button, down, 0, 0, 0, ""))
     }
 
-    fun handoffWheel(id: Long, x: Int, y: Int, wheelY: Int) {
+    fun handoffWheel(id: Long, x: Int, y: Int, wheelY: Int, ctrl: Boolean = false) {
         if (!canHandoff()) return
-        post(PacketType.HandoffInput, HandoffPayloads.writeInput(id, HandoffPayloads.InputWheel, x, y, 0, false, 0, wheelY, 0, ""))
+        post(PacketType.HandoffInput, HandoffPayloads.writeInput(id, HandoffPayloads.InputWheel, x, y, if (ctrl) HandoffPayloads.WheelCtrl else 0, false, 0, wheelY, 0, ""))
+    }
+
+    /** Adaptive-bitrate report: VideoConfig with fps 0 carries delay (low 16 bits) and drops (high 16). */
+    fun handoffStats(id: Long, delayMs: Int, dropped: Int) {
+        if (!canHandoff()) return
+        val packed = ((dropped.coerceIn(0, 0x7FFF).toLong() shl 16) or delayMs.coerceIn(1, 0xFFFF).toLong())
+        postFast(PacketType.HandoffVideoConfig, HandoffPayloads.writeVideo(id, packed, 0, false))
     }
 
     fun handoffKey(id: Long, vk: Int, down: Boolean) {
@@ -176,9 +183,10 @@ class ClientEngine(
         post(PacketType.HandoffInput, HandoffPayloads.writeInput(id, HandoffPayloads.InputText, 0, 0, 0, false, 0, 0, 0, text))
     }
 
-    fun handoffGeometry(id: Long, x: Int, y: Int, physW: Int, physH: Int) {
+    fun handoffGeometry(id: Long, x: Int, y: Int, physW: Int, physH: Int, density: Float = 1f) {
         if (!canHandoff()) return
-        post(PacketType.HandoffGeometry, HandoffPayloads.writeGeometry(id, x, y, physW, physH, physW, physH))
+        val d = if (density > 0.5f) density else 1f
+        post(PacketType.HandoffGeometry, HandoffPayloads.writeGeometry(id, x, y, physW, physH, (physW / d).toInt(), (physH / d).toInt()))
     }
 
     fun handoffState(id: Long, value: Int) {

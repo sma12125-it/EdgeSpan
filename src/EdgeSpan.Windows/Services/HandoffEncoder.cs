@@ -33,7 +33,7 @@ internal static class WindowEncoder
     private static readonly Guid Texture2DIid = new("6f15aaf2-d208-4e89-9ab4-489535d34f9c");
     private const int NeedMoreInput = unchecked((int)0xC00D6D72);
 
-    public static void Run(nint hwnd, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report)
+    public static void Run(nint hwnd, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report, Func<int>? bitrateCap = null)
     {
         var sent = 0;
         try
@@ -42,7 +42,7 @@ internal static class WindowEncoder
             {
                 sent++;
                 publish(bytes, us, flags);
-            }, report);
+            }, report, bitrateCap);
         }
         catch (Exception ex)
         {
@@ -52,7 +52,7 @@ internal static class WindowEncoder
         }
     }
 
-    private static void Loop(nint hwnd, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report)
+    private static void Loop(nint hwnd, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report, Func<int>? bitrateCap)
     {
         ID3D11Device device;
         try
@@ -131,7 +131,7 @@ internal static class WindowEncoder
             session.StartCapture();
             try
             {
-                Pump(device, context, pool, quality, stop, takeIdr, publish, report, arrived, mf);
+                Pump(device, context, pool, quality, stop, takeIdr, publish, report, arrived, mf, bitrateCap);
             }
             finally
             {
@@ -144,7 +144,7 @@ internal static class WindowEncoder
         }
     }
 
-    private static void Pump(ID3D11Device device, ID3D11DeviceContext context, Direct3D11CaptureFramePool pool, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report, ManualResetEventSlim arrived, bool allowH264)
+    private static void Pump(ID3D11Device device, ID3D11DeviceContext context, Direct3D11CaptureFramePool pool, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report, ManualResetEventSlim arrived, bool allowH264, Func<int>? bitrateCap)
     {
         Encoder? encoder = null;
         var black = 0;
@@ -184,13 +184,27 @@ internal static class WindowEncoder
             }
             using (texture)
             {
-                if (!useJpeg && (encoder == null || encoder.Width != width || encoder.Height != height || encoder.Failed))
+                var wanted = EdgeSpan.Layout.HandoffPolicy.Bitrate(width, height, quality);
+                var cap = bitrateCap?.Invoke() ?? 0;
+                if (cap > 0)
+                    wanted = Math.Min(wanted, cap);
+                // Adaptive bitrate: reopen the encoder (fresh IDR) only on a real change and at most every 3 s.
+                var retune = encoder != null && !encoder.Failed
+                    && EdgeSpan.Layout.HandoffPolicy.ShouldRetune(encoder.Bitrate, wanted, Environment.TickCount64 - encoder.OpenedAt);
+                if (!useJpeg && (encoder == null || encoder.Width != width || encoder.Height != height || encoder.Failed || retune))
                 {
+                    if (retune)
+                        DiagLog.Write($"handoff bitrate {encoder!.Bitrate} -> {wanted}");
                     encoder?.Dispose();
                     encoder = null;
-                    var bitrate = EdgeSpan.Layout.HandoffPolicy.Bitrate(width, height, quality);
+                    var bitrate = wanted;
                     var fps = EdgeSpan.Layout.HandoffPolicy.FrameRate(quality);
                     encoder = Encoder.Open(device, width, height, bitrate, fps, out var path);
+                    if (encoder != null)
+                    {
+                        encoder.Bitrate = bitrate;
+                        encoder.OpenedAt = Environment.TickCount64;
+                    }
                     if (encoder == null)
                     {
                         useJpeg = true;
@@ -415,6 +429,8 @@ internal static class WindowEncoder
         public int Width;
         public int Height;
         public int Fps;
+        public int Bitrate;
+        public long OpenedAt;
         public int LastHash;
         public bool Failed;
         private readonly IMFTransform _transform;

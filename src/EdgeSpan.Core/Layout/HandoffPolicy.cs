@@ -75,6 +75,40 @@ public static class HandoffPolicy
         return (int)Math.Clamp(rate, 1_500_000, 20_000_000);
     }
 
+    /// <summary>
+    /// PC window size for a tablet viewport so the app keeps the tablet's apparent text size:
+    /// tablet DIPs times the PC window's scale, never larger than the tablet's physical pixels.
+    /// Old clients send DIP == physical; then the window simply matches the physical size.
+    /// </summary>
+    public static (int W, int H) WindowSize(int physW, int physH, int dipW, int dipH, int pcDpi)
+    {
+        physW = Math.Max(2, physW);
+        physH = Math.Max(2, physH);
+        if (dipW <= 0 || dipH <= 0 || (dipW == physW && dipH == physH) || pcDpi <= 0)
+            return (physW, physH);
+        var scale = pcDpi / 96.0;
+        return (Math.Clamp((int)Math.Round(dipW * scale), 200, physW), Math.Clamp((int)Math.Round(dipH * scale), 150, physH));
+    }
+
+    /// <summary>Retune when the target moved by more than 25 % and the encoder has run for at least 3 s.</summary>
+    public static bool ShouldRetune(int current, int wanted, long ageMs) =>
+        current > 0 && wanted > 0 && ageMs >= 3000 && Math.Abs(wanted - current) > current / 4;
+
+    /// <summary>
+    /// Adaptive bitrate from the receiver's measured delay (capture → display, via HandoffClock).
+    /// Late frames halve the cap; a steady link raises it by 20 % up to the preset. Floor 1.5 Mbps.
+    /// </summary>
+    public static int NextCap(int cap, int preset, int delayMs, int droppedPerSec)
+    {
+        if (cap <= 0) cap = preset;
+        int next;
+        if (delayMs > 250 || droppedPerSec > 5) next = cap / 2;
+        else if (delayMs > 120 || droppedPerSec > 0) next = cap * 4 / 5;
+        else if (delayMs < 60) next = cap * 6 / 5;
+        else next = cap;
+        return Math.Clamp(next, 1_500_000, Math.Max(1_500_000, preset));
+    }
+
     public static int FrameRate(string? quality) => quality == "saver" ? 30 : 60;
 
     public static (int Width, int Height) EncodeSize(int width, int height, string? quality)

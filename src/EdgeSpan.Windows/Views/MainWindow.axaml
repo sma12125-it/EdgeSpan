@@ -594,6 +594,15 @@
       <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding HandoffPc}" OnContent="" OffContent=""/></WrapPanel>
     </Grid>
   </Border>
+            <Border Classes="setting" IsVisible="{Binding HandoffPc}">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 3,4 L 15,4 L 15,14 L 3,14 Z M 6,9 L 12,9"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding HandoffPlaceholderLabel}"/>
+      </StackPanel>
+      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding HandoffPlaceholder}" OnContent="" OffContent=""/></WrapPanel>
+    </Grid>
+  </Border>
             <Border Classes="setting">
     <Grid ColumnDefinitions="Auto,*,Auto">
       <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 8,8 0 1 1 8.99,1 M 9,8 L 9,13 M 9,5 L 9,5.2"/></ContentControl>

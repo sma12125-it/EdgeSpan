@@ -1,5 +1,6 @@
 package com.edgestpan.app
 
+import android.util.Log
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -43,7 +44,8 @@ class HandoffViewer(
     private val method: String,
     private val strings: Map<String, String>,
     private val flush: () -> Unit,
-    private val onFail: (String) -> Unit = {}
+    private val onFail: (String) -> Unit = {},
+    private val videoHost: () -> String? = { null }
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val actions = ConcurrentLinkedQueue<() -> Unit>()
@@ -106,10 +108,18 @@ class HandoffViewer(
             ScreenEdge.Top -> (DisplaySize.height - contentH).coerceAtLeast(0)
             else -> 0
         }
+        // Line the window up with where the pointer crossed so it "continues" from the PC.
+        if (edge == ScreenEdge.Left || edge == ScreenEdge.Right)
+            videoY = (engine.y - contentH / 2).coerceIn(0, (DisplaySize.height - contentH).coerceAtLeast(0))
+        else
+            videoX = (engine.x - contentW / 2).coerceIn(0, (DisplaySize.width - contentW).coerceAtLeast(0))
         val id = event.id
         val title = event.title.ifBlank { strings["handoffWaiting"] ?: "Waiting for the window…" }
         Thread({
-            if (method != "usb") {
+            // USB goes through the adb reverse tunnel; LAN/direct links dial the PC's own address.
+            val host = if (method == "usb") "127.0.0.1" else videoHost()
+            Log.i("EdgeSpan", "handoff video via $method host=${host ?: "none"}")
+            if (host == null) {
                 fail(id, "handoffNoLink")
                 return@Thread
             }
@@ -120,7 +130,7 @@ class HandoffViewer(
             }
             val sock = Socket()
             try {
-                sock.connect(InetSocketAddress("127.0.0.1", 27184), 2000)
+                sock.connect(InetSocketAddress(host, 27184), if (method == "usb") 2000 else 3000)
                 sock.tcpNoDelay = true
                 sock.sendBufferSize = 64 * 1024
                 sock.receiveBufferSize = 256 * 1024
@@ -325,9 +335,43 @@ class HandoffViewer(
         surfaceView = video
         imageView = still
         statusView = status
-        runCatching { Motion.settle(column, edge, Motion.reduce(ctx)) }
+        runCatching { entrance(column, ctx) }
         params = lp
         column.requestFocus()
+    }
+
+    /** Slides the window in from the shared edge wearing a glow-coloured outline that fades out. */
+    private fun entrance(view: View, ctx: Context) {
+        if (Motion.reduce(ctx)) return
+        val glow = ctx.getSharedPreferences("edgestpan", Context.MODE_PRIVATE).getInt("glowColor", Color.parseColor("#3DDC84"))
+        val d = DisplaySize.density
+        val outline = android.graphics.drawable.GradientDrawable().apply {
+            setColor(Color.parseColor("#12141C"))
+            setStroke((3 * d).toInt().coerceAtLeast(2), glow)
+        }
+        view.background = outline
+        val w = contentW.toFloat()
+        val h = (contentH + captionPx).toFloat()
+        // Right edge on the PC means the tablet sits to the right, so the window arrives from the tablet's left.
+        val (fx, fy) = when (edge) {
+            ScreenEdge.Right -> -w to 0f
+            ScreenEdge.Left -> w to 0f
+            ScreenEdge.Bottom -> 0f to -h
+            else -> 0f to h
+        }
+        view.translationX = fx
+        view.translationY = fy
+        view.alpha = 0.6f
+        view.animate().translationX(0f).translationY(0f).alpha(1f).setDuration(260)
+            .setInterpolator(android.view.animation.DecelerateInterpolator(1.6f))
+            .withEndAction {
+                val fade = android.animation.ValueAnimator.ofInt(255, 0).setDuration(500)
+                fade.addUpdateListener {
+                    val a = it.animatedValue as Int
+                    outline.setStroke((3 * d).toInt().coerceAtLeast(2), (glow and 0x00FFFFFF) or (a shl 24))
+                }
+                fade.start()
+            }.start()
     }
 
     private fun onCaption(id: Long, event: MotionEvent): Boolean {
@@ -382,28 +426,59 @@ class HandoffViewer(
         return true
     }
 
+    private val gesture = com.edgestpan.protocol.TouchGesture()
+    private var longPress: Runnable? = null
+
+    private fun emit(id: Long, outs: List<com.edgestpan.protocol.TouchGesture.Out>) {
+        for (o in outs) when (o) {
+            is com.edgestpan.protocol.TouchGesture.Out.Move -> { moveX = o.x; moveY = o.y; movePending = true }
+            is com.edgestpan.protocol.TouchGesture.Out.Button -> actions.add { engine.handoffButton(id, o.x, o.y, o.button, o.down) }
+            is com.edgestpan.protocol.TouchGesture.Out.Wheel -> actions.add { engine.handoffWheel(id, o.x, o.y, o.delta, o.ctrl) }
+        }
+    }
+
     private fun onVideo(id: Long, event: MotionEvent): Boolean {
         root?.requestFocus()
         val view = if (imageView?.visibility == View.VISIBLE) imageView else surfaceView
         if (view == null) return true
-        val sx = (event.x).toInt().coerceIn(0, (view.width - 1).coerceAtLeast(0))
-        val sy = (event.y).toInt().coerceIn(0, (view.height - 1).coerceAtLeast(0))
-        val x = sx * contentW / view.width.coerceAtLeast(1)
-        val y = sy * contentH / view.height.coerceAtLeast(1)
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                if (event.pointerCount == 1) actions.add { engine.handoffButton(id, x, y, 1, true) }
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if (event.pointerCount >= 2) {
-                    actions.add { engine.handoffWheel(id, x, y, -event.y.toInt().coerceIn(-120, 120)) }
-                } else {
-                    moveX = x
-                    moveY = y
-                    movePending = true
+        val vw = view.width.coerceAtLeast(1)
+        val vh = view.height.coerceAtLeast(1)
+        fun mapX(px: Float) = px.coerceIn(0f, (vw - 1).toFloat()) * contentW / vw
+        fun mapY(py: Float) = py.coerceIn(0f, (vh - 1).toFloat()) * contentH / vh
+        val x = mapX(event.x)
+        val y = mapY(event.y)
+        val t = SystemClock.uptimeMillis()
+        // A real mouse (the shared pointer or a USB/Bluetooth mouse): buttons map 1:1.
+        if (event.isFromSource(android.view.InputDevice.SOURCE_MOUSE)) {
+            val right = (event.buttonState and MotionEvent.BUTTON_SECONDARY) != 0
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> actions.add { engine.handoffButton(id, x.toInt(), y.toInt(), if (right) 2 else 1, true) }
+                MotionEvent.ACTION_MOVE -> { moveX = x.toInt(); moveY = y.toInt(); movePending = true }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    actions.add { engine.handoffButton(id, x.toInt(), y.toInt(), 1, false) }
+                    actions.add { engine.handoffButton(id, x.toInt(), y.toInt(), 2, false) }
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> actions.add { engine.handoffButton(id, x, y, 1, false) }
+            return true
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                emit(id, gesture.down(x, y, t))
+                longPress?.let { main.removeCallbacks(it) }
+                val r = Runnable { emit(id, gesture.tick(SystemClock.uptimeMillis())) }
+                longPress = r
+                main.postDelayed(r, 520)
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount >= 2) {
+                    longPress?.let { main.removeCallbacks(it) }
+                    emit(id, gesture.multi(mapX(event.getX(0)), mapY(event.getY(0)), mapX(event.getX(1)), mapY(event.getY(1))))
+                } else emit(id, gesture.move(x, y, t))
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                longPress?.let { main.removeCallbacks(it) }
+                if (event.actionMasked == MotionEvent.ACTION_CANCEL) gesture.reset() else emit(id, gesture.up(x, y, t))
+            }
         }
         return true
     }
@@ -439,7 +514,8 @@ class HandoffViewer(
         val h = contentH
         val x = videoX
         val y = videoY
-        actions.add { engine.handoffGeometry(id, x, y, w, h) }
+        val density = context.resources.displayMetrics.density
+        actions.add { engine.handoffGeometry(id, x, y, w, h, density) }
     }
 
     private fun layout() {
@@ -463,6 +539,8 @@ class HandoffViewer(
         var held: MediaFrames.Frame? = null
         streamEnded = false
         val input = sock.getInputStream()
+        val meter = com.edgestpan.protocol.DelayMeter()
+        var dropped = 0
         fun pump(decoder: MediaCodec) {
             val info = MediaCodec.BufferInfo()
             while (true) {
@@ -515,7 +593,16 @@ class HandoffViewer(
                 rest.copyInto(body, 4)
                 val frame = MediaFrames.open(key, seq, body)
                 seq++
+                if (frame != null) {
+                    val now = SystemClock.elapsedRealtime()
+                    meter.add(now, System.nanoTime() / 1000, frame.captureUs)?.let { delay ->
+                        val d = dropped
+                        dropped = 0
+                        actions.add { engine.handoffStats(id, delay, d) }
+                    }
+                }
                 if (frame == null) {
+                    dropped++
                     val now = SystemClock.elapsedRealtime()
                     if (now - asked > 500) {
                         asked = now

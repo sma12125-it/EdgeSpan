@@ -48,6 +48,10 @@ public sealed class AppSettings
     public bool HotkeySwitchEnabled { get; set; } = true;
     public bool DeviceNumberHotkeys { get; set; } = true;
     public string HotkeyLock { get; set; } = "Ctrl+Alt+L";
+    /// <summary>Sends the foreground window to the tablet (Windows to Android handoff).</summary>
+    public string HotkeySendWindow { get; set; } = "Ctrl+Alt+T";
+    /// <summary>Leave a small "on tablet" card where a handed-off window used to be.</summary>
+    public bool HandoffPlaceholder { get; set; }
     public string Handoff { get; set; } = "off";
     public string HandoffQuality { get; set; } = "sharp";
     public bool EdgeGlowEnabled { get; set; } = true;

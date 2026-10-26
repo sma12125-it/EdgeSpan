@@ -10,6 +10,8 @@ object HandoffPayloads {
     const val InputWheel = 3
     const val InputKey = 4
     const val InputText = 5
+    /** Button field of a wheel input: hold Ctrl (pinch zoom). */
+    const val WheelCtrl = 8
     const val StateFocused = 1
     const val StateMinimized = 2
     const val StateRestored = 3

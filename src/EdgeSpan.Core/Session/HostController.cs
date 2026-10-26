@@ -41,7 +41,7 @@ public abstract record Effect
     public sealed record ControlChanged(string? DeviceId, int X, int Y, int DevW = 0, int DevH = 0) : Effect;
     public sealed record ModifiersReleased : Effect;
     public sealed record HandoffAccepted(string DeviceId, uint Id, byte Codec, int ViewW, int ViewH) : Effect;
-    public sealed record HandoffGeometry(uint Id, int X, int Y, int PhysW, int PhysH) : Effect;
+    public sealed record HandoffGeometry(uint Id, int X, int Y, int PhysW, int PhysH, int DipW = 0, int DipH = 0) : Effect;
     public sealed record HandoffInput(uint Id, byte Kind, int X, int Y, byte Button, bool Down, int WheelX, int WheelY, int Vk, string Text) : Effect;
     public sealed record HandoffState(uint Id, byte Value) : Effect;
     public sealed record HandoffReturned(uint Id) : Effect;
@@ -93,6 +93,8 @@ public sealed class HostController : IDisposable
     public bool WindowDrag { get => _windowDrag; set => _windowDrag = value; }
     public Func<bool>? DragProbe { get; set; }
     public Action<string, ScreenEdge>? DragHandoff { get; set; }
+    /// <summary>Raised by the "send window to tablet" hotkey; the Windows side picks the foreground window.</summary>
+    public Action? SendWindowHotkey { get; set; }
     public Action? DragFailed { get; set; }
     public string DragFailureKey { get; private set; } = "";
     private readonly FileSync _files = new();
@@ -855,6 +857,16 @@ public sealed class HostController : IDisposable
         }
     }
 
+    /// <summary>True when <paramref name="address"/> is the current direct (non-relay) address of a paired, live link.</summary>
+    public bool IsPairedAddress(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+        lock (_gate)
+            return _links.Values.Any(l => l.Session != null && l.RelayPeer == null && l.Remote != null
+                && (l.Remote.Address.IsIPv4MappedToIPv6 ? l.Remote.Address.MapToIPv4() : l.Remote.Address).Equals(address));
+    }
+
     public byte[]? MediaKeyFor(string deviceId)
     {
         lock (_gate)
@@ -1378,7 +1390,7 @@ public sealed class HostController : IDisposable
                     _effects.Add(new Effect.HandoffAccepted(link.Config.Id, accepted.Id, accepted.Codec, accepted.ViewW, accepted.ViewH));
                     break;
                 case SessionEvent.HandoffGeometryReceived geometry:
-                    _effects.Add(new Effect.HandoffGeometry(geometry.Id, geometry.X, geometry.Y, geometry.PhysW, geometry.PhysH));
+                    _effects.Add(new Effect.HandoffGeometry(geometry.Id, geometry.X, geometry.Y, geometry.PhysW, geometry.PhysH, geometry.DipW, geometry.DipH));
                     break;
                 case SessionEvent.HandoffInputReceived input:
                     _effects.Add(new Effect.HandoffInput(input.Id, input.Kind, input.X, input.Y, input.Button, input.Down, input.WheelX, input.WheelY, input.Vk, input.Text));
@@ -1565,6 +1577,9 @@ public sealed class HostController : IDisposable
             return true;
         if (Settings.DeviceNumberHotkeys && HotkeyPolicy.TryNumberChord(virtualKey, ctrl, alt, shift, win, out _))
             return true;
+        var send = HotkeyParser.Parse(Settings.HotkeySendWindow);
+        if (send.VirtualKey != 0 && HandoffPolicy.AllowsPcToPhone(Settings.Handoff) && send.Matches(virtualKey, ctrl, alt, shift, win))
+            return true;
         var locker = HotkeyParser.Parse(Settings.HotkeyLock);
         return locker.VirtualKey != 0 && locker.Matches(virtualKey, ctrl, alt, shift, win);
     }
@@ -1586,6 +1601,12 @@ public sealed class HostController : IDisposable
             {
                 ReleaseModifiers(ActiveLink(), includeHeldKeys: false);
                 JumpTo(number);
+                return true;
+            }
+            var send = HotkeyParser.Parse(Settings.HotkeySendWindow);
+            if (send.VirtualKey != 0 && HandoffPolicy.AllowsPcToPhone(Settings.Handoff) && send.Matches(virtualKey, ctrl, alt, shift, win))
+            {
+                SendWindowHotkey?.Invoke();
                 return true;
             }
             var locker = HotkeyParser.Parse(Settings.HotkeyLock);

@@ -129,6 +129,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public event Action<string>? RemoteClipboard;
 
     public HostController Host => _runtime.Host;
+
+    public void SendWindowToTablet() => _runtime.SendWindowToTablet();
     public ObservableCollection<DeviceRow> Devices { get; } = new();
     public ObservableCollection<PeerRow> Peers { get; } = new();
     public ObservableCollection<string> Logs { get; } = new();
@@ -241,14 +243,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private string SettingsSig() => string.Join("\u001f", DisplayName, ListenPort, ClipboardShare, FileTransfer, LaunchAtStartup,
         HotkeySwitch, HotkeyLock, HotkeySwitchEnabled, DeviceNumberHotkeys, EdgeGlowEnabled, EdgeGlowColor, EdgeGlowIntensity,
-        EdgeGlowThickness, BreakthroughEnabled, BreakthroughIntensity, ReduceMotion, SoundEnabled, InternetEnabled, HandoffPc,
+        EdgeGlowThickness, BreakthroughEnabled, BreakthroughIntensity, ReduceMotion, SoundEnabled, InternetEnabled, HandoffPc, HandoffPlaceholder,
         RelayUrl, StunHost, StunPort, PublicHost, PublicPort);
 
     private string DeviceSig() => _selected == null ? "" : string.Join("\u001f", _selected.Id, EditName, EditAddress, EditPort,
         EditWidth, EditHeight, PcEdgeIndex, ReturnEdgeIndex, AnchorIndex, CornerIndex, EditOffset, EditSpan, EditCornerSize, EditSpeed);
 
     private string SettingsFlags() => string.Join(",", ClipboardShare, FileTransfer, LaunchAtStartup, HotkeySwitchEnabled,
-        DeviceNumberHotkeys, EdgeGlowEnabled, BreakthroughEnabled, ReduceMotion, SoundEnabled, InternetEnabled, HandoffPc);
+        DeviceNumberHotkeys, EdgeGlowEnabled, BreakthroughEnabled, ReduceMotion, SoundEnabled, InternetEnabled, HandoffPc, HandoffPlaceholder);
 
     private string DeviceFlags() => string.Join(",", _selected?.Id, PcEdgeIndex, ReturnEdgeIndex, AnchorIndex, CornerIndex);
 
@@ -485,6 +487,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool RecordingHotkey { get; private set; }
     public bool InternetEnabled { get; set; }
     public bool HandoffPc { get; set; }
+    public bool HandoffPlaceholder { get; set; }
     public string HandoffStatus { get; private set; } = "";
     public string RelayUrl { get; set; } = "";
     public string StunHost { get; set; } = "";
@@ -570,6 +573,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string EnableInternetLabel { get; private set; } = "";
     public string HandoffPcLabel { get; private set; } = "";
     public string HandoffPcHint { get; private set; } = "";
+    public string HandoffPlaceholderLabel { get; private set; } = "";
     public string ClipboardLabel { get; private set; } = "";
     public string HotkeySwitchLabel { get; private set; } = "";
     public string HotkeyLockLabel { get; private set; } = "";
@@ -883,6 +887,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         EnableInternetLabel = T("enableInternet");
         HandoffPcLabel = T("handoffPc");
         HandoffPcHint = T("handoffPcHint");
+        HandoffPlaceholderLabel = T("handoffPlaceholderLabel");
         ClipboardLabel = T("clipboardShare");
         FileTransferLabel = T("fileTransfer");
         HotkeySwitchLabel = T("hotkeySwitch");
@@ -949,7 +954,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             nameof(LeftLabel), nameof(RightLabel), nameof(TopLabel), nameof(BottomLabel), nameof(EdgeLabel),
             nameof(TopLeftLabel), nameof(TopRightLabel), nameof(BottomLeftLabel), nameof(BottomRightLabel),
             nameof(LayoutHint), nameof(SpeedHint), nameof(OffsetHint), nameof(HostScreenLabel), nameof(ListenPortLabel),
-            nameof(InternetLabel), nameof(RelayLabel), nameof(StunLabel), nameof(StunHint), nameof(PublicHostLabel), nameof(PublicHostHint), nameof(EnableInternetLabel), nameof(HandoffPcLabel), nameof(HandoffPcHint), nameof(ClipboardLabel), nameof(FileTransferLabel),
+            nameof(InternetLabel), nameof(RelayLabel), nameof(StunLabel), nameof(StunHint), nameof(PublicHostLabel), nameof(PublicHostHint), nameof(EnableInternetLabel), nameof(HandoffPcLabel), nameof(HandoffPcHint), nameof(HandoffPlaceholderLabel), nameof(ClipboardLabel), nameof(FileTransferLabel),
             nameof(HotkeySwitchLabel), nameof(HotkeyLockLabel), nameof(HotkeySwitchEnableLabel), nameof(RecordHotkeyLabel),
             nameof(DeviceNumberHotkeysLabel), nameof(NumberHotkeysHint), nameof(SwitchShortcutLine), nameof(InputTraceLine), nameof(TraySwitchText),
             nameof(GlowEnableLabel), nameof(GlowColorLabel), nameof(GlowIntensityLabel), nameof(GlowThicknessLabel),
@@ -987,6 +992,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         SoundEnabled = s.SoundEnabled;
         InternetEnabled = s.InternetEnabled;
         HandoffPc = s.Handoff is "pc" or "both";
+        HandoffPlaceholder = s.HandoffPlaceholder;
         RelayUrl = s.RelayUrl;
         StunHost = s.StunHost;
         StunPort = s.StunPort;
@@ -997,7 +1003,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             nameof(HotkeySwitch), nameof(HotkeyLock), nameof(HotkeySwitchEnabled), nameof(DeviceNumberHotkeys),
             nameof(EdgeGlowEnabled), nameof(EdgeGlowColor), nameof(EdgeGlowIntensity), nameof(EdgeGlowThickness),
             nameof(BreakthroughEnabled), nameof(BreakthroughIntensity), nameof(ReduceMotion), nameof(SoundEnabled),
-            nameof(InternetEnabled), nameof(HandoffPc), nameof(RelayUrl), nameof(StunHost),
+            nameof(InternetEnabled), nameof(HandoffPc), nameof(HandoffPlaceholder), nameof(RelayUrl), nameof(StunHost),
             nameof(StunPort), nameof(PublicHost), nameof(PublicPort), nameof(LicenseKey));
     }
 
@@ -1143,7 +1149,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
         EdgeGlowThickness = s.EdgeGlowThickness;
         BreakthroughIntensity = s.BreakthroughIntensity;
         s.InternetEnabled = InternetEnabled;
-        s.Handoff = HandoffPc ? "pc" : "off";
+        // Keep the Android-to-PC half ("phone") when only the PC-to-tablet toggle changes.
+        var phone = s.Handoff is "phone" or "both";
+        s.Handoff = HandoffPc ? (phone ? "both" : "pc") : (phone ? "phone" : "off");
+        s.HandoffPlaceholder = HandoffPlaceholder;
         s.RelayUrl = string.IsNullOrWhiteSpace(RelayUrl) ? s.RelayUrl : RelayUrl.Trim();
         s.StunHost = string.IsNullOrWhiteSpace(StunHost) ? "" : StunHost.Trim();
         if (string.Equals(s.StunHost, "stun.l.google.com", StringComparison.OrdinalIgnoreCase))
