@@ -1,0 +1,12 @@
+# Protocol, crypto, and Compose call sites are reached by name and from the service thread.
+-keep class com.edgestpan.** { *; }
+-keep class com.google.zxing.** { *; }
+-keep class com.journeyapps.barcodescanner.** { *; }
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn org.bouncycastle.**
+-dontwarn kotlinx.serialization.**
+-keepattributes Signature,InnerClasses,EnclosingMethod,*Annotation*,RuntimeVisibleAnnotations
+-keepclassmembers class javax.crypto.** { *; }

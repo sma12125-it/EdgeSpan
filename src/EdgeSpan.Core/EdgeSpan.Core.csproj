@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>EdgeSpan</RootNamespace>
+    <AssemblyName>EdgeSpan.Core</AssemblyName>
+    <Description>EdgeSpan protocol, pairing, layout, and session core.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\i18n\strings.json">
+      <LogicalName>edgestpan.strings.json</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

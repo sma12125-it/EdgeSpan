@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EdgeSpan</string>
+    <string name="acc_description">EdgeSpan moves the pointer, clicks, drags, and scrolls when Wireless ADB is not available. It does not read the screen.</string>
+    <string name="ime_name">EdgeSpan</string>
+    <string name="notification_text">Ready to take the pointer from your PC</string>
+</resources>

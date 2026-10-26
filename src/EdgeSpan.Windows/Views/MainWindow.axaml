@@ -1,0 +1,442 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:EdgeSpan.Windows.Controls"
+        x:Class="EdgeSpan.Windows.Views.MainWindow"
+        Title="EdgeSpan"
+        Width="1180" Height="800"
+        MinWidth="390" MinHeight="620"
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource InkBrush}"
+        WindowStartupLocation="CenterScreen"
+        Cursor="Arrow">
+  <Grid x:Name="RootGrid">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="248"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+    <Border x:Name="SideNav" Background="{DynamicResource SideBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0" Padding="16,20">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="4,0,4,22">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Image Source="/Assets/icon.png" Width="36" Height="36"/>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="EdgeSpan" FontSize="18" FontWeight="SemiBold"/>
+              <TextBlock Text="{Binding VersionShort}" Classes="muted" FontSize="11"/>
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,18,0,0">
+          <TextBlock Text="{Binding LanguageLabel}" Classes="muted" FontSize="12"/>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="ghost" Content="{Binding EnglishLabel}" Command="{Binding EnglishCommand}"/>
+            <Button Classes="ghost" Content="{Binding PersianLabel}" Command="{Binding PersianCommand}"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="ghost" Content="{Binding DarkLabel}" Command="{Binding DarkCommand}"/>
+            <Button Classes="ghost" Content="{Binding LightLabel}" Command="{Binding LightCommand}"/>
+          </StackPanel>
+        </StackPanel>
+        <StackPanel Spacing="4">
+          <Button Classes="nav" Classes.selected="{Binding ConnectSelected}" Content="{Binding NavConnect}" Command="{Binding ShowConnectCommand}"/>
+          <Button Classes="nav" Classes.selected="{Binding OverviewSelected}" Content="{Binding NavOverview}" Command="{Binding ShowOverviewCommand}"/>
+          <Button Classes="nav" Classes.selected="{Binding DevicesSelected}" Content="{Binding NavDevices}" Command="{Binding ShowDevicesCommand}"/>
+          <Button Classes="nav" Classes.selected="{Binding LayoutSelected}" Content="{Binding NavLayout}" Command="{Binding ShowLayoutCommand}"/>
+          <Button Classes="nav" Classes.selected="{Binding NetworkSelected}" Content="{Binding NavNetwork}" Command="{Binding ShowNetworkCommand}"/>
+          <Button Classes="nav" Classes.selected="{Binding PairingSelected}" Content="{Binding NavPairing}" Command="{Binding ShowPairingCommand}"/>
+          <Button Classes="nav" Classes.selected="{Binding LicenseSelected}" Content="{Binding NavLicense}" Command="{Binding ShowLicenseCommand}"/>
+          <Button Classes="nav" Classes.selected="{Binding AboutSelected}" Content="{Binding NavAbout}" Command="{Binding ShowAboutCommand}"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <Grid Grid.Column="1">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <Border x:Name="TopNav" IsVisible="False" Background="{DynamicResource SideBrush}" Padding="10" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Classes="nav" Classes.selected="{Binding ConnectSelected}" Content="{Binding NavConnect}" Command="{Binding ShowConnectCommand}"/>
+            <Button Classes="nav" Classes.selected="{Binding OverviewSelected}" Content="{Binding NavOverview}" Command="{Binding ShowOverviewCommand}"/>
+            <Button Classes="nav" Classes.selected="{Binding DevicesSelected}" Content="{Binding NavDevices}" Command="{Binding ShowDevicesCommand}"/>
+            <Button Classes="nav" Classes.selected="{Binding LayoutSelected}" Content="{Binding NavLayout}" Command="{Binding ShowLayoutCommand}"/>
+            <Button Classes="nav" Classes.selected="{Binding NetworkSelected}" Content="{Binding NavNetwork}" Command="{Binding ShowNetworkCommand}"/>
+            <Button Classes="nav" Classes.selected="{Binding PairingSelected}" Content="{Binding NavPairing}" Command="{Binding ShowPairingCommand}"/>
+            <Button Classes="nav" Classes.selected="{Binding AboutSelected}" Content="{Binding NavAbout}" Command="{Binding ShowAboutCommand}"/>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+      <ScrollViewer x:Name="Pages" Grid.Row="1" Padding="28,24">
+        <StackPanel Spacing="18" MaxWidth="920">
+          <StackPanel IsVisible="{Binding ShowConnect}" Spacing="16">
+            <TextBlock Text="{Binding BrandKicker}" Classes="kicker"/>
+            <TextBlock Classes="h1" Text="{Binding ConnectTitle}"/>
+            <TextBlock Text="{Binding ConnectLead}" Classes="muted" FontSize="15"/>
+            <StackPanel Spacing="12" IsVisible="{Binding ShowMethodCards}">
+              <Button Classes="method" Command="{Binding ChooseUsbCommand}">
+                <Grid ColumnDefinitions="180,*">
+                  <c:LinkSketch Method="usb" Phase="idle" Height="108" IsHitTestVisible="False"/>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0" Spacing="4">
+                    <TextBlock Text="{Binding UsbTitle}" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding UsbBody}" Classes="muted"/>
+                  </StackPanel>
+                </Grid>
+              </Button>
+              <Button Classes="method" Command="{Binding ChooseLanCommand}">
+                <Grid ColumnDefinitions="180,*">
+                  <c:LinkSketch Method="lan" Phase="idle" Height="108" IsHitTestVisible="False"/>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0" Spacing="4">
+                    <TextBlock Text="{Binding LanTitle}" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding LanBody}" Classes="muted"/>
+                  </StackPanel>
+                </Grid>
+              </Button>
+              <Button Classes="method" Command="{Binding ChooseRelayCommand}">
+                <Grid ColumnDefinitions="180,*">
+                  <c:LinkSketch Method="relay" Phase="idle" Height="108" IsHitTestVisible="False"/>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0" Spacing="4">
+                    <TextBlock Text="{Binding RelayTitle}" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding RelayBody}" Classes="muted"/>
+                  </StackPanel>
+                </Grid>
+              </Button>
+            </StackPanel>
+            <StackPanel Spacing="12" IsVisible="{Binding ShowConnectWork}">
+              <Border Classes="card" Height="240" Padding="8">
+                <c:LinkSketch Method="{Binding ActiveMethod}" Phase="{Binding ConnectPhase}"/>
+              </Border>
+              <TextBlock Text="{Binding ConnectStatus}" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              <TextBlock Text="{Binding ConnectDetail}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding HasConnectDetail}"/>
+              <TextBlock Text="{Binding SamsungHint}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowRetry}"/>
+              <Button Classes="ghost" Content="{Binding OpenSamsungLabel}" Command="{Binding OpenSamsungCommand}" HorizontalAlignment="Left" IsVisible="{Binding ShowRetry}"/>
+              <StackPanel Spacing="8" IsVisible="{Binding ShowLanTools}">
+                <TextBlock Text="{Binding PinLabel}" Classes="muted"/>
+                <TextBlock Text="{Binding PinText}" FontSize="40" FontWeight="SemiBold" Foreground="#174A8B" IsVisible="{Binding PairingVisible}"/>
+                <Image Source="{Binding QrImage}" Width="180" Height="180" HorizontalAlignment="Left" IsVisible="{Binding PairingVisible}"/>
+                <TextBlock Text="{Binding DiscoveredLabel}" FontWeight="SemiBold"/>
+                <ItemsControl ItemsSource="{Binding Peers}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding Detail}" Classes="muted"/>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <StackPanel Spacing="8" IsVisible="{Binding ShowRelayTools}">
+                <TextBlock Text="{Binding RelayLabel}"/>
+                <TextBox Text="{Binding RelayUrl, Mode=TwoWay}"/>
+                <TextBlock Text="{Binding StunLabel}"/>
+                <Grid ColumnDefinitions="*,120">
+                  <TextBox Text="{Binding StunHost, Mode=TwoWay}" Watermark="{Binding StunHint}" Margin="0,0,8,0"/>
+                  <NumericUpDown Grid.Column="1" Value="{Binding StunPort}" Minimum="1" Maximum="65535"/>
+                </Grid>
+                <TextBlock Text="{Binding PublicHostLabel}"/>
+                <Grid ColumnDefinitions="*,120">
+                  <TextBox Text="{Binding PublicHost, Mode=TwoWay}" Watermark="203.0.113.10" Margin="0,0,8,0"/>
+                  <NumericUpDown Grid.Column="1" Value="{Binding PublicPort}" Minimum="0" Maximum="65535"/>
+                </Grid>
+                <TextBlock Text="{Binding PublicHostHint}" Classes="muted" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding PinText}" FontSize="40" FontWeight="SemiBold" Foreground="#174A8B" IsVisible="{Binding PairingVisible}"/>
+                <Image Source="{Binding QrImage}" Width="180" Height="180" HorizontalAlignment="Left" IsVisible="{Binding PairingVisible}"/>
+                <Button Classes="primary" Content="{Binding SaveLabel}" Command="{Binding ChooseRelayCommand}" HorizontalAlignment="Left"/>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="primary" Content="{Binding RetryLabel}" Command="{Binding RetryConnectCommand}" IsVisible="{Binding ShowRetry}"/>
+                <Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}"/>
+              </StackPanel>
+            </StackPanel>
+            <StackPanel Spacing="12" IsVisible="{Binding ShowConnectedView}">
+              <Border Classes="card" Height="260" Padding="8">
+                <c:LinkSketch Method="{Binding ActiveMethod}" Phase="connected"/>
+              </Border>
+              <TextBlock Text="{Binding ConnectedTitle}" FontSize="26" FontWeight="SemiBold"/>
+              <UniformGrid Columns="2">
+                <Border Classes="card" Margin="0,0,8,0">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding LatencyLabel}" Classes="muted"/>
+                    <TextBlock Text="{Binding RttText}" FontSize="28" FontWeight="SemiBold"/>
+                  </StackPanel>
+                </Border>
+                <Border Classes="card" Margin="8,0,0,0">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding TypeLabel}" Classes="muted"/>
+                    <TextBlock Text="{Binding ConnectKind}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource MintBrush}"/>
+                  </StackPanel>
+                </Border>
+              </UniformGrid>
+              <Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}" HorizontalAlignment="Left"/>
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding ShowOverview}" Spacing="16">
+            <TextBlock Text="{Binding BrandKicker}" Classes="kicker"/>
+            <TextBlock Classes="h1" Text="{Binding NavOverview}"/>
+            <TextBlock Text="{Binding Tagline}" Classes="muted" FontSize="15"/>
+            <Border Classes="card">
+              <StackPanel Spacing="8">
+                <TextBlock Text="{Binding StatusText}" FontSize="26" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding ListenText}" Classes="muted"/>
+                <TextBlock Text="{Binding LicenseText}" Foreground="{DynamicResource GoldBrush}"/>
+                <TextBlock Text="{Binding SwitchShortcutLine}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding InputTraceLine}" Foreground="{DynamicResource AccentBrush}"/>
+              </StackPanel>
+            </Border>
+            <UniformGrid Columns="3">
+              <Border Classes="card" Margin="0,0,10,0">
+                <StackPanel Spacing="6">
+                  <TextBlock Text="{Binding ActiveText}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                  <TextBlock Text="{Binding LockText}" Classes="muted"/>
+                </StackPanel>
+              </Border>
+              <Border Classes="card" Margin="5,0">
+                <StackPanel Spacing="6">
+                  <TextBlock Text="{Binding RttText}" FontSize="22" FontWeight="SemiBold"/>
+                  <TextBlock Text="{Binding PathText}" Foreground="{DynamicResource MintBrush}"/>
+                </StackPanel>
+              </Border>
+              <Border Classes="card" Margin="10,0,0,0">
+                <StackPanel Spacing="6">
+                  <TextBlock Text="{Binding PacketText}" FontSize="16" FontWeight="SemiBold"/>
+                  <TextBlock Text="{Binding InjectionHint}" Classes="muted"/>
+                </StackPanel>
+              </Border>
+            </UniformGrid>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="primary" Content="{Binding SwitchButton}" Command="{Binding CycleCommand}"/>
+              <Button Classes="ghost" Content="{Binding LockButton}" Command="{Binding LockCommand}"/>
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding ShowDevices}" Spacing="16">
+            <TextBlock Classes="h1" Text="{Binding NavDevices}"/>
+            <TextBlock Text="{Binding EmptyHint}" Classes="muted" IsVisible="{Binding NoDevices}"/>
+            <ItemsControl ItemsSource="{Binding Devices}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="card" Margin="0,0,0,10">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding Detail}" Classes="muted"/>
+                        <TextBlock Text="{Binding Badge}" Foreground="{DynamicResource MintBrush}"/>
+                      </StackPanel>
+                      <Button Grid.Column="1" Classes="ghost" Content="{Binding $parent[Window].DataContext.AddDeviceLabel}"
+                              Command="{Binding $parent[Window].DataContext.RemoveDeviceCommand}" IsVisible="False"/>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" MaxHeight="220"/>
+            <Button Classes="ghost" Content="{Binding RemoveLabel}" Command="{Binding RemoveDeviceCommand}" HorizontalAlignment="Left"/>
+            <TextBlock Text="{Binding DiscoveredLabel}" FontWeight="SemiBold"/>
+            <ItemsControl ItemsSource="{Binding Peers}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="card" Margin="0,0,0,8" Padding="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding Detail}" Classes="muted"/>
+                      </StackPanel>
+                      <Button Grid.Column="1" Classes="primary" Content="{Binding $parent[Window].DataContext.AddDeviceLabel}"
+                              Command="{Binding $parent[Window].DataContext.AddPeerCommand}" CommandParameter="{Binding}"/>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border Classes="card">
+              <StackPanel Spacing="8">
+                <TextBlock Text="{Binding ManualAddLabel}" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding ManualName}" Watermark="{Binding NameLabel}"/>
+                <TextBox Text="{Binding ManualAddress}" Watermark="{Binding AddressLabel}"/>
+                <NumericUpDown Value="{Binding ManualPort}" Minimum="1" Maximum="65535"/>
+                <Button Classes="primary" Content="{Binding AddDeviceLabel}" Command="{Binding AddManualCommand}" HorizontalAlignment="Left"/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding ShowLayout}" Spacing="16">
+            <TextBlock Classes="h1" Text="{Binding NavLayout}"/>
+            <TextBlock Text="{Binding LayoutHint}" Classes="muted"/>
+            <TextBlock Text="{Binding DragHint}" Classes="muted"/>
+            <Border Classes="card" Height="360" Padding="8">
+              <c:LayoutCanvas x:Name="Map" Devices="{Binding LayoutDevices}" ActiveId="{Binding ActiveDeviceId}" HostLabel="{Binding HostScreenLabel}"/>
+            </Border>
+            <TextBlock Text="{Binding ProblemText}" Foreground="{DynamicResource GoldBrush}" TextWrapping="Wrap" IsVisible="{Binding HasProblems}"/>
+            <TextBlock Text="{Binding NoDeviceSelected}" Classes="muted" IsVisible="{Binding !HasEditor}"/>
+            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" IsVisible="{Binding HasEditor}">
+              <TextBlock Text="{Binding PcEdgeLabel}"/>
+              <ComboBox Grid.Row="1" SelectedIndex="{Binding PcEdgeIndex}" Margin="0,4,8,8">
+                <ComboBoxItem Content="{Binding LeftLabel}"/>
+                <ComboBoxItem Content="{Binding RightLabel}"/>
+                <ComboBoxItem Content="{Binding TopLabel}"/>
+                <ComboBoxItem Content="{Binding BottomLabel}"/>
+              </ComboBox>
+              <TextBlock Grid.Column="1" Text="{Binding ReturnEdgeLabel}"/>
+              <ComboBox Grid.Column="1" Grid.Row="1" SelectedIndex="{Binding ReturnEdgeIndex}" Margin="8,4,0,8">
+                <ComboBoxItem Content="{Binding LeftLabel}"/>
+                <ComboBoxItem Content="{Binding RightLabel}"/>
+                <ComboBoxItem Content="{Binding TopLabel}"/>
+                <ComboBoxItem Content="{Binding BottomLabel}"/>
+              </ComboBox>
+              <TextBlock Grid.Row="2" Text="{Binding AnchorLabel}"/>
+              <ComboBox Grid.Row="3" SelectedIndex="{Binding AnchorIndex}" Margin="0,4,8,8">
+                <ComboBoxItem Content="{Binding EdgeLabel}"/>
+                <ComboBoxItem Content="{Binding CornerLabel}"/>
+              </ComboBox>
+              <TextBlock Grid.Column="1" Grid.Row="2" Text="{Binding CornerLabel}"/>
+              <ComboBox Grid.Column="1" Grid.Row="3" SelectedIndex="{Binding CornerIndex}" Margin="8,4,0,8">
+                <ComboBoxItem Content="{Binding TopLeftLabel}"/>
+                <ComboBoxItem Content="{Binding TopRightLabel}"/>
+                <ComboBoxItem Content="{Binding BottomLeftLabel}"/>
+                <ComboBoxItem Content="{Binding BottomRightLabel}"/>
+              </ComboBox>
+              <TextBlock Grid.Row="4" Text="{Binding OffsetLabel}"/>
+              <NumericUpDown Grid.Row="5" Value="{Binding EditOffset}" Minimum="0" Maximum="20000" Margin="0,4,8,0"/>
+              <TextBlock Grid.Column="1" Grid.Row="4" Text="{Binding SpanLabel}"/>
+              <NumericUpDown Grid.Column="1" Grid.Row="5" Value="{Binding EditSpan}" Minimum="0" Maximum="20000" Margin="8,4,0,0"/>
+            </Grid>
+            <TextBlock Text="{Binding CornerSizeLabel}" IsVisible="{Binding HasEditor}"/>
+            <NumericUpDown Value="{Binding EditCornerSize}" Minimum="20" Maximum="2000" IsVisible="{Binding HasEditor}"/>
+            <TextBlock Text="{Binding SpeedLabel}" IsVisible="{Binding HasEditor}"/>
+            <NumericUpDown Value="{Binding EditSpeed}" Minimum="0.1" Maximum="8" Increment="0.1" FormatString="0.0" IsVisible="{Binding HasEditor}"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="primary" Content="{Binding ApplyLabel}" Command="{Binding SaveDeviceCommand}"/>
+              <Button Classes="ghost" Content="{Binding SimulateLeaveLabel}" Command="{Binding SimulateLeaveCommand}"/>
+              <Button Classes="ghost" Content="{Binding SimulateReturnLabel}" Command="{Binding SimulateReturnCommand}"/>
+            </StackPanel>
+            <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}"/>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding ShowNetwork}" Spacing="16">
+            <TextBlock Classes="h1" Text="{Binding NavNetwork}"/>
+            <TextBlock Text="{Binding SecurityNote}" Classes="muted"/>
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <TextBlock Text="{Binding NameLabel}"/>
+                <TextBox Text="{Binding DisplayName}"/>
+                <TextBlock Text="{Binding ListenPortLabel}"/>
+                <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"/>
+                <TextBlock Text="{Binding ListenText}" Classes="muted"/>
+                <CheckBox Content="{Binding ClipboardLabel}" IsChecked="{Binding ClipboardShare}"/>
+                <CheckBox Content="{Binding FileTransferLabel}" IsChecked="{Binding FileTransfer}"/>
+                <CheckBox Content="{Binding HotkeySwitchEnableLabel}" IsChecked="{Binding HotkeySwitchEnabled}"/>
+                <TextBlock Text="{Binding HotkeySwitchLabel}"/>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBox Text="{Binding HotkeySwitch}" Margin="0,0,8,0"/>
+                  <Button Grid.Column="1" Classes="ghost" Content="{Binding RecordHotkeyLabel}" Command="{Binding RecordHotkeyCommand}"/>
+                </Grid>
+                <TextBlock Text="{Binding HotkeyConflict}" Foreground="{DynamicResource GoldBrush}" TextWrapping="Wrap" IsVisible="{Binding HasHotkeyConflict}"/>
+                <TextBlock Text="{Binding NumberHotkeysHint}" Classes="muted" TextWrapping="Wrap"/>
+                <CheckBox Content="{Binding DeviceNumberHotkeysLabel}" IsChecked="{Binding DeviceNumberHotkeys}"/>
+                <TextBlock Text="{Binding HotkeyLockLabel}"/>
+                <TextBox Text="{Binding HotkeyLock}"/>
+                <CheckBox Content="{Binding GlowEnableLabel}" IsChecked="{Binding EdgeGlowEnabled}"/>
+                <CheckBox Content="{Binding BreakthroughLabel}" IsChecked="{Binding BreakthroughEnabled}"/>
+                <TextBlock Text="{Binding BreakthroughIntensityLabel}"/>
+                <NumericUpDown Value="{Binding BreakthroughIntensity}" Minimum="0" Maximum="100"/>
+                <c:BreakthroughSketch Height="56" Intensity="{Binding BreakthroughIntensity}" Reduce="{Binding ReduceMotion}"/>
+                <CheckBox Content="{Binding ReduceMotionLabel}" IsChecked="{Binding ReduceMotion}"/>
+                <CheckBox Content="{Binding SoundLabel}" IsChecked="{Binding SoundEnabled}"/>
+                <TextBlock Text="{Binding SoundHint}" Classes="muted" TextWrapping="Wrap"/>
+                <CheckBox Content="{Binding HandoffPcLabel}" IsChecked="{Binding HandoffPc}"/>
+                <TextBlock Text="{Binding HandoffPcHint}" Classes="muted" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding HandoffStatus}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding GlowColorLabel}"/>
+                <TextBox Text="{Binding EdgeGlowColor}"/>
+                <TextBlock Text="{Binding GlowIntensityLabel}"/>
+                <NumericUpDown Value="{Binding EdgeGlowIntensity}" Minimum="0" Maximum="100"/>
+                <TextBlock Text="{Binding GlowThicknessLabel}"/>
+                <NumericUpDown Value="{Binding EdgeGlowThickness}" Minimum="4" Maximum="120"/>
+                <CheckBox Content="{Binding StartupLabel}" IsChecked="{Binding LaunchAtStartup}" IsEnabled="{Binding IsWindows}"/>
+                <TextBlock Text="{Binding StartupHint}" Classes="muted"/>
+                <CheckBox Content="{Binding EnableInternetLabel}" IsChecked="{Binding InternetEnabled}"/>
+                <TextBlock Text="{Binding RelayLabel}"/>
+                <TextBox Text="{Binding RelayUrl}"/>
+                <TextBlock Text="{Binding StunLabel}"/>
+                <Grid ColumnDefinitions="*,120">
+                  <TextBox Text="{Binding StunHost}" Margin="0,0,8,0"/>
+                  <NumericUpDown Grid.Column="1" Value="{Binding StunPort}" Minimum="1" Maximum="65535"/>
+                </Grid>
+                <TextBlock Text="{Binding RawInputNote}" Classes="muted"/>
+                <Button Classes="primary" Content="{Binding SaveLabel}" Command="{Binding SaveSettingsCommand}" HorizontalAlignment="Left"/>
+                <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}"/>
+                <TextBlock Text="{Binding DiagTitle}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding DiagLogLabel}" Classes="muted"/>
+                <TextBlock Text="{Binding DiagPath}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding DiagTail}" Classes="muted" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding InjectNoteText}" TextWrapping="Wrap"/>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="ghost" Content="{Binding DiagExportLabel}" Command="{Binding ExportLogCommand}"/>
+                  <Button Classes="ghost" Content="{Binding OpenSamsungLabel}" Command="{Binding OpenSamsungCommand}"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding ShowPairing}" Spacing="16">
+            <TextBlock Text="PIN" Classes="kicker"/>
+            <TextBlock Classes="h1" Text="{Binding NavPairing}"/>
+            <TextBlock Text="{Binding QrHint}" Classes="muted" FontSize="15"/>
+            <Button Classes="primary" Content="{Binding StartPairingLabel}" Command="{Binding StartPairingCommand}" HorizontalAlignment="Left"/>
+            <Border Classes="card" IsVisible="{Binding PairingVisible}" Background="#F7FBFF">
+              <StackPanel Spacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Data="M 2,8 L 7,13 L 16,3" Stroke="#0E7A3D" StrokeThickness="2.2" StrokeJoin="Round" StrokeLineCap="Round" Width="18" Height="16" Stretch="Uniform" VerticalAlignment="Center"/>
+                  <TextBlock Text="{Binding PairingState}" TextWrapping="Wrap" Foreground="#12182B" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Text="{Binding PinLabel}" Foreground="#5C6A8A"/>
+                <TextBlock Text="{Binding PinText}" FontSize="48" FontWeight="SemiBold" Foreground="#174A8B"/>
+                <Image Source="{Binding QrImage}" Width="260" Height="260" HorizontalAlignment="Left"/>
+                <Button Classes="ghost" Content="{Binding CopyPinLabel}" Command="{Binding CopyPinCommand}" HorizontalAlignment="Left"/>
+              </StackPanel>
+            </Border>
+            <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}"/>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding ShowLicense}" Spacing="16">
+            <TextBlock Classes="h1" Text="{Binding NavLicense}"/>
+            <Border Classes="card">
+              <TextBlock Text="{Binding LicenseText}" FontSize="22" FontWeight="SemiBold"/>
+            </Border>
+            <TextBlock Text="{Binding LicenseNote}" Classes="muted"/>
+            <TextBlock Text="{Binding LicenseKeyLabel}"/>
+            <TextBox Text="{Binding LicenseKey}" Watermark="ES-PR-XXXXXXXX-XXXX"/>
+            <Button Classes="primary" Content="{Binding ActivateLabel}" Command="{Binding ActivateCommand}" HorizontalAlignment="Left"/>
+            <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}"/>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding ShowAbout}" Spacing="16">
+            <StackPanel Orientation="Horizontal" Spacing="14">
+              <Image Source="/Assets/icon.png" Width="72" Height="72"/>
+              <StackPanel VerticalAlignment="Center" Spacing="4">
+                <TextBlock Text="EdgeSpan" FontSize="28" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding VersionText}" Foreground="{DynamicResource GoldBrush}"/>
+                <TextBlock Text="{Binding BuildText}" Classes="muted"/>
+              </StackPanel>
+            </StackPanel>
+            <TextBlock Text="{Binding AboutBody}" TextWrapping="Wrap" FontSize="15" LineHeight="24"/>
+            <Border Classes="card">
+              <TextBlock Text="{Binding LicenseText}" FontSize="18" FontWeight="SemiBold"/>
+            </Border>
+            <TextBlock Text="{Binding Eula}" Classes="muted"/>
+            <TextBlock Text="{Binding HideHint}" Classes="muted"/>
+            <TextBlock Text="{Binding DiagPathHint}" TextWrapping="Wrap" Classes="muted"/>
+            <TextBlock Text="{Binding DiagPath}" Classes="muted"/>
+            <Button Classes="ghost" Content="{Binding DiagExportLabel}" Command="{Binding ExportLogCommand}" HorizontalAlignment="Left"/>
+            <TextBlock Text="{Binding LogLabel}" FontWeight="SemiBold"/>
+            <ItemsControl ItemsSource="{Binding Logs}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding}" Classes="muted" FontSize="12"/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </Grid>
+</Window>

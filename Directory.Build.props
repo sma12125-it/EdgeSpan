@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <Product>EdgeSpan</Product>
+    <Version>0.9.11</Version>
+    <Company>EdgeSpan</Company>
+  </PropertyGroup>
+</Project>

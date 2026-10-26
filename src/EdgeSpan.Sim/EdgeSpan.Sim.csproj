@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>EdgeSpan.Sim</RootNamespace>
+    <AssemblyName>EdgeSpan.Sim</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EdgeSpan.Core\EdgeSpan.Core.csproj" />
+  </ItemGroup>
+</Project>

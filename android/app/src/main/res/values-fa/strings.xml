@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">اج‌اسپن</string>
+    <string name="acc_description">اج‌اسپن وقتی اشکال‌زدایی بی‌سیم در دسترس نیست، نشانگر را حرکت می‌دهد و کلیک، کشیدن و پیمایش را انجام می‌دهد. صفحه را نمی‌خواند.</string>
+    <string name="ime_name">اج‌اسپن</string>
+    <string name="notification_text">آماده گرفتن نشانگر از رایانه شما</string>
+</resources>
