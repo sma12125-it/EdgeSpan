@@ -6,6 +6,7 @@ if [[ -z "$sdk" || ! -d "$sdk" ]]; then
   echo "ANDROID_HOME is not set, so the APK and UHID server were not built." >&2
   exit 1
 fi
+version="$("$root/scripts/version.sh" android)"
 cd "$root/android"
 ks_pass="${EDGESPAN_KS_PASS:-edgestpan-dev}"
 key_pass="${EDGESPAN_KEY_PASS:-$ks_pass}"
@@ -56,7 +57,8 @@ align="$(find "$sdk/build-tools" -type f -name zipalign | sort | tail -1)"
 # Gradle's v1 block is not the first ZIP entry, so JarInputStream (used by
 # some file managers) never sees the manifest and the install sits forever.
 # apksigner rewrites v1+v2+v3 with the manifest first and keeps alignment.
-signed="$server_dir/EdgeSpan-Android.apk"
+rm -f "$server_dir"/EdgeSpan-Android*.apk
+signed="$server_dir/EdgeSpan-Android-$version.apk"
 "$bt" sign \
   --ks "$ks" \
   --ks-pass pass:"$ks_pass" \

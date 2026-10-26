@@ -12,8 +12,16 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+      - name: Read version (android/app/build.gradle.kts versionName)
+        id: ver
+        run: |
+          v="$(bash scripts/version.sh android)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$v" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -44,26 +52,35 @@ jobs:
           scripts/build-android.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: EdgeSpan-Android-apk
-          path: publish/android-server/EdgeSpan-Android.apk
+          name: EdgeSpan-Android-${{ env.VERSION }}
+          path: publish/android-server/EdgeSpan-Android-${{ env.VERSION }}.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: edgestpan-server-dex
+          name: edgestpan-server-dex-${{ env.VERSION }}
           path: publish/android-server/edgestpan-server.dex
           if-no-files-found: error
 
   windows:
     runs-on: windows-latest
     needs: android
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+      - name: Read version (Directory.Build.props)
+        id: ver
+        shell: bash
+        run: |
+          v="$(bash scripts/version.sh windows)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$v" >> "$GITHUB_ENV"
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
       - uses: actions/download-artifact@v4
         with:
-          name: edgestpan-server-dex
+          name: edgestpan-server-dex-${{ needs.android.outputs.version }}
           path: publish/android-server
       - name: Fetch Windows platform-tools (adb)
         shell: pwsh
@@ -82,12 +99,12 @@ jobs:
         run: |
           export EDGESPAN_ADB_DIR="$(cygpath -u "$RUNNER_TEMP")/ptwin/platform-tools"
           bash scripts/publish-windows.sh
-          test -f publish/EdgeSpan-Setup.exe
-          ls -la publish/win-x64 publish/EdgeSpan-Setup.exe
+          test -f "publish/EdgeSpan-Setup-$VERSION.exe"
+          ls -la publish/win-x64 "publish/EdgeSpan-Setup-$VERSION.exe"
       - uses: actions/upload-artifact@v4
         with:
-          name: EdgeSpan-Setup-exe
-          path: publish/EdgeSpan-Setup.exe
+          name: EdgeSpan-Setup-${{ env.VERSION }}
+          path: publish/EdgeSpan-Setup-${{ env.VERSION }}.exe
           if-no-files-found: error
 
   release:
@@ -101,5 +118,6 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/EdgeSpan-Android-apk/EdgeSpan-Android.apk
-            dist/EdgeSpan-Setup-exe/EdgeSpan-Setup.exe
+            dist/EdgeSpan-Android-${{ needs.android.outputs.version }}/EdgeSpan-Android-${{ needs.android.outputs.version }}.apk
+            dist/EdgeSpan-Setup-${{ needs.windows.outputs.version }}/EdgeSpan-Setup-${{ needs.windows.outputs.version }}.exe
+          fail_on_unmatched_files: true

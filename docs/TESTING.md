@@ -34,7 +34,7 @@ Both devices must use the same Wi-Fi. A VPN on the PC can hide it from the phone
 
 ## 3. Install the Android app
 
-1. Copy `EdgeSpan-Android.apk` onto the phone (USB, Drive, or a mail attachment to yourself).
+1. Copy `EdgeSpan-Android-<version>.apk` onto the phone (USB, Drive, or a mail attachment to yourself).
 2. Open the file. If Android blocks it, allow installs from that app (Files, Chrome, or Drive) under **Install unknown apps**.
 3. If Play Protect warns you, this is expected for a test build. Install anyway.
 4. Open EdgeSpan. The first launch is a short walkthrough: accessibility, drawing over other apps, the EdgeSpan keyboard, and wireless debugging. Each page has a button that opens the matching Android setting. You can skip and come back later. Pick **English** or **فارسی** under Settings. Type a name for the phone if you want one.

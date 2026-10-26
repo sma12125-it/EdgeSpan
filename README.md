@@ -75,7 +75,7 @@ A Windows build that uses the .NET 8 runtime already installed on the PC:
 scripts/publish-windows.sh
 ```
 
-`scripts/publish-windows.sh` writes `publish/win-x64`, including `adb.exe` and `edgestpan-server.dex`, then NSIS builds `publish/EdgeSpan-Setup.exe` with LZMA when `makensis` is installed. Inno Setup 6 can compile `installer/edgestpan.iss` on Windows instead. The PC needs the .NET 8 runtime.
+`scripts/publish-windows.sh` writes `publish/win-x64`, including `adb.exe` and `edgestpan-server.dex`, then NSIS builds `publish/EdgeSpan-Setup-<version>.exe` (version from `Directory.Build.props`) with LZMA when `makensis` is installed. Inno Setup 6 can compile `installer/edgestpan.iss` on Windows instead (`iscc /DMyAppVersion=<version>`). The PC needs the .NET 8 runtime.
 
 ## Run the relay
 

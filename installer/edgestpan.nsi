@@ -1,11 +1,16 @@
-; EdgeSpan Windows installer. Build on Linux with: makensis installer/edgestpan.nsi
+; EdgeSpan Windows installer. Built by scripts/publish-windows.sh, which passes
+; -DVERSION from Directory.Build.props: makensis -DVERSION=x.y.z installer/edgestpan.nsi
 ; Expects publish/win-x64/EdgeSpan.exe plus adb and the server dex beside it.
+
+!ifndef VERSION
+  !error "Pass -DVERSION=x.y.z (see scripts/publish-windows.sh)"
+!endif
 
 Unicode true
 SetCompressor /SOLID lzma
 SetCompressorDictSize 32
 Name "EdgeSpan"
-OutFile "..\publish\EdgeSpan-Setup.exe"
+OutFile "..\publish\EdgeSpan-Setup-${VERSION}.exe"
 InstallDir "$LOCALAPPDATA\EdgeSpan"
 RequestExecutionLevel user
 InstallDirRegKey HKCU "Software\EdgeSpan" "InstallDir"
@@ -24,7 +29,7 @@ Section "EdgeSpan"
   WriteRegStr HKCU "Software\EdgeSpan" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "DisplayName" "EdgeSpan"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "DisplayVersion" "0.9.13"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "DisplayVersion" "${VERSION}"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\EdgeSpan" "NoRepair" 1
 SectionEnd

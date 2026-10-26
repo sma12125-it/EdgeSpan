@@ -2,7 +2,11 @@
 ; after scripts/publish-windows.sh has produced publish\win-x64\EdgeSpan.exe.
 
 #define MyAppName "EdgeSpan"
-#define MyAppVersion "0.9.13"
+; Pass the version from Directory.Build.props, e.g.
+;   iscc /DMyAppVersion=0.0.0 installer\edgestpan.iss  (use scripts/version.sh windows)
+#ifndef MyAppVersion
+  #error Pass /DMyAppVersion=x.y.z (the <Version> in Directory.Build.props)
+#endif
 #define MyAppPublisher "EdgeSpan"
 #define MyAppExeName "EdgeSpan.exe"
 
@@ -15,7 +19,7 @@ DefaultDirName={autopf}\EdgeSpan
 DefaultGroupName=EdgeSpan
 DisableProgramGroupPage=yes
 OutputDir=..\publish
-OutputBaseFilename=EdgeSpan-Setup
+OutputBaseFilename=EdgeSpan-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

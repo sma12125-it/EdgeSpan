@@ -2,6 +2,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 out="${1:-$root/publish/win-x64}"
+version="$("$root/scripts/version.sh" windows)"
 rm -rf "$out"
 mkdir -p "$out"
 # Framework-dependent: the .NET 8 runtime stays on the PC, so the installer
@@ -34,6 +35,7 @@ if [[ "$out" != "$stage" ]]; then
   done
 fi
 if command -v makensis >/dev/null 2>&1; then
-  makensis "$root/installer/edgestpan.nsi"
-  echo "Installer: $root/publish/EdgeSpan-Setup.exe"
+  rm -f "$root"/publish/EdgeSpan-Setup*.exe
+  makensis "-DVERSION=$version" "$root/installer/edgestpan.nsi"
+  echo "Installer: $root/publish/EdgeSpan-Setup-$version.exe"
 fi
