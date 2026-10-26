@@ -253,47 +253,65 @@ public sealed class SessionRuntime : IDisposable
             ShowGlow(Host.Machine.ActiveDeviceId);
     }
 
-    private void ShowGlow(string? deviceId)
+    private GlowBand? ShowGlow(string? deviceId)
     {
         if (!OperatingSystem.IsWindows() || !Host.Settings.EdgeGlowEnabled || string.IsNullOrEmpty(deviceId))
         {
             _glow.Hide();
-            return;
+            return null;
         }
         var device = Host.Settings.Devices.FirstOrDefault(d => d.Id == deviceId);
         if (device == null || !PlacementParser.TryParse(device, out var placement, out _))
         {
             _glow.Hide();
-            return;
+            return null;
         }
         var originX = Host.Settings.ScreenOriginX;
         var originY = Host.Settings.ScreenOriginY;
         var width = Math.Max(1, Host.Settings.ScreenWidth);
         var height = Math.Max(1, Host.Settings.ScreenHeight);
         var dpi = EdgeGlow.DpiAt(originX + width / 2, originY);
-        var thick = Math.Max(36, Math.Clamp(Host.Settings.EdgeGlowThickness, 8, 160)) * dpi / 96;
+        var thick = Math.Max(64, Math.Clamp(Host.Settings.EdgeGlowThickness, 8, 160)) * dpi / 96;
         var band = GlowBand.For(placement, originX, originY, width, height, Math.Max(1, thick));
         _glow.Show(band, Host.Settings.EdgeGlowColor, Host.Settings.EdgeGlowIntensity);
+        return band;
     }
 
-    private void NoteCross(string? deviceId)
+    private void NoteCross(string? deviceId, int x, int y, int devW, int devH)
     {
+        var reduce = Motion.Reduced(Host.Settings.ReduceMotion, ClientAnimationOff());
         if (!string.IsNullOrEmpty(deviceId))
         {
+            // Windows -> Android: the Windows half of the shared line bulges out at the exit point.
             _glowDevice = deviceId;
-            ShowGlow(deviceId);
+            var band = ShowGlow(deviceId);
+            if (band is { } b && Host.Settings.BreakthroughEnabled)
+            {
+                var vertical = b.Edge is GlowEdge.Left or GlowEdge.Right;
+                var along = vertical ? y / (double)Math.Max(1, devH) : x / (double)Math.Max(1, devW);
+                if (devW <= 0 || devH <= 0)
+                    along = CursorAlong(b);
+                _glow.Cross(ElasticMode.Exit, along, reduce);
+            }
             CrossCue(deviceId);
             return;
         }
         var back = _glowDevice;
         if (Host.Settings.BreakthroughEnabled && Host.Settings.EdgeGlowEnabled && !string.IsNullOrEmpty(back))
         {
-            ShowGlow(back);
+            // Android -> Windows: the line is stretched in at the mapped point and tears.
+            var band = ShowGlow(back);
+            if (band is { } b)
+            {
+                var along = ElasticLine.Along(b.Edge, x, y, Host.Settings.ScreenOriginX, Host.Settings.ScreenOriginY,
+                    Math.Max(1, Host.Settings.ScreenWidth), Math.Max(1, Host.Settings.ScreenHeight));
+                _glow.Cross(ElasticMode.Enter, along, reduce);
+            }
             CrossCue(back);
             var token = ++_entryGen;
             ThreadPool.QueueUserWorkItem(_ =>
             {
-                Thread.Sleep(380);
+                Thread.Sleep((int)ElasticLine.DurationMs + 40);
                 if (token == _entryGen && Host.Machine.ActiveDeviceId == null)
                     _glow.Hide();
             });
@@ -301,6 +319,20 @@ public sealed class SessionRuntime : IDisposable
         }
         ShowGlow(null);
     }
+
+    private double CursorAlong(GlowBand band)
+    {
+        if (!OperatingSystem.IsWindows() || !GetCursorPos(out var p))
+            return 0.5;
+        return ElasticLine.Along(band.Edge, p.X, p.Y, Host.Settings.ScreenOriginX, Host.Settings.ScreenOriginY,
+            Math.Max(1, Host.Settings.ScreenWidth), Math.Max(1, Host.Settings.ScreenHeight));
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct CursorPoint { public int X; public int Y; }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out CursorPoint point);
 
     private void CrossCue(string? deviceId)
     {
@@ -382,7 +414,7 @@ public sealed class SessionRuntime : IDisposable
             {
                 _input?.ApplyControl(changed.DeviceId != null);
                 _input?.ReleaseStuckModifiers();
-                NoteCross(changed.DeviceId);
+                NoteCross(changed.DeviceId, changed.X, changed.Y, changed.DevW, changed.DevH);
             }
             else if (effect is Effect.ModifiersReleased)
                 _input?.ReleaseStuckModifiers();

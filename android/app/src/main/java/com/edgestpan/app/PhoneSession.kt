@@ -594,7 +594,9 @@ class PhoneSession(
                         local = false
                         try {
                             if (Motion.breakthrough(context)) {
-                                glow.ripple(event.edge)
+                                DisplaySize.ensure(context)
+                                val along = com.edgestpan.protocol.ElasticLine.along(event.edge, event.x, event.y, DisplaySize.width, DisplaySize.height)
+                                glow.cross(event.edge, com.edgestpan.protocol.ElasticLine.ENTER, along, false)
                                 cue()
                             } else glow.hide()
                         } catch (thrown: Throwable) {
@@ -607,10 +609,14 @@ class PhoneSession(
                         glowState = GlowPolicy.leave(event.edge, glowState.finger)
                         local = true
                         injector.hidePointer()
-                        if (glowState.show && glowOn()) {
-                            glow.show(glowState.edge)
-                            if (Motion.breakthrough(context)) cue()
-                        } else glow.hide()
+                        val exitAlong = com.edgestpan.protocol.ElasticLine.along(glowState.edge, engine.x, engine.y, DisplaySize.width, DisplaySize.height)
+                        val keep = glowState.show && glowOn()
+                        if (Motion.breakthrough(context)) {
+                            // Android -> Windows: the Android half bulges out at the exit point.
+                            runCatching { glow.cross(glowState.edge, com.edgestpan.protocol.ElasticLine.EXIT, exitAlong, keep) }
+                                .onFailure { CrashLog.caught(context, "edge-return effects", it) }
+                            cue()
+                        } else if (keep) glow.show(glowState.edge) else glow.hide()
                     }
                     is ClientEvent.Button -> {
                         buttons++

@@ -36,6 +36,11 @@ public sealed class EdgeGlow : IDisposable
     private long _lastTick;
     private bool _quit;
     private Request? _request;
+    private ElasticMode _crossMode;
+    private double _crossAlong = 0.5;
+    private long _crossStart;
+    private bool _crossing;
+    private double _dpiScale = 1;
     private WndProc? _wndProc;
 
     public void Show(GlowBand band, string? color, int intensity)
@@ -80,6 +85,26 @@ public sealed class EdgeGlow : IDisposable
             _burst.Retarget(1);
             _lastTick = 0;
         }
+        Ensure();
+        Post(1);
+    }
+
+    /// <summary>
+    /// Plays the shared elastic boundary at <paramref name="along"/> (0..1 along the edge):
+    /// Exit bulges outward and snaps back, Enter stretches inward and tears.
+    /// </summary>
+    public void Cross(ElasticMode mode, double along, bool reduceMotion)
+    {
+        if (!OperatingSystem.IsWindows() || reduceMotion)
+            return;
+        lock (_gate)
+        {
+            _crossMode = mode;
+            _crossAlong = Math.Clamp(along, 0, 1);
+            _crossStart = Environment.TickCount64;
+            _crossing = true;
+        }
+        DiagLog.Write($"glow cross mode={mode} along={along:0.000}");
         Ensure();
         Post(1);
     }
@@ -160,10 +185,11 @@ public sealed class EdgeGlow : IDisposable
         if (_hwnd == IntPtr.Zero)
             return;
         SetWindowPos(_hwnd, new IntPtr(-1), request.Band.X, request.Band.Y, request.Band.Width, request.Band.Height, 0x0010 | 0x0040);
+        _dpiScale = DpiAt(request.Band.X + request.Band.Width / 2, request.Band.Y + request.Band.Height / 2) / 96.0;
         Paint(request.Band, request.Color, request.Intensity);
         _alive = true;
         Present(request.Band);
-        SetTimer(_hwnd, 1, 33, IntPtr.Zero);
+        SetTimer(_hwnd, 1, (uint)(_crossing || _bursting ? 15 : 33), IntPtr.Zero);
         DiagLog.Write($"glow show hwnd={_hwnd} x={request.Band.X} y={request.Band.Y} w={request.Band.Width} h={request.Band.Height}");
     }
 
@@ -182,7 +208,7 @@ public sealed class EdgeGlow : IDisposable
                 Present(current.Band);
             }
             if (_hwnd != IntPtr.Zero)
-                SetTimer(_hwnd, 1, (uint)(_bursting ? 16 : 33), IntPtr.Zero);
+                SetTimer(_hwnd, 1, (uint)(_bursting || _crossing ? 15 : 33), IntPtr.Zero);
         }
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
@@ -264,13 +290,47 @@ public sealed class EdgeGlow : IDisposable
             _pixels = new byte[bytes];
         var step = bytes > 180_000 * 4 ? 2 : 1;
         var longSide = Math.Max(_width, _height);
+        bool crossing;
+        ElasticMode mode;
+        double cross;
+        double ms;
+        lock (_gate)
+        {
+            ms = Environment.TickCount64 - _crossStart;
+            if (_crossing && ms >= ElasticLine.DurationMs)
+                _crossing = false;
+            crossing = _crossing;
+            mode = _crossMode;
+            cross = _crossAlong;
+        }
+        var vertical = _height >= _width;
+        var thickPx = Math.Max(1, vertical ? _width : _height);
+        var lineCore = 1.6 * _dpiScale / thickPx;
+        var lineHalo = lineCore * 5;
+        var rest = mode == ElasticMode.Exit ? 0.30 : 0.05;
+        // Accent teal-green #14B8A6 for the elastic line.
+        const double ar = 0x14, ag = 0xB8, ab = 0xA6;
+        double[]? linePos = null;
+        double[]? lineOp = null;
+        if (crossing)
+        {
+            var n = vertical ? _height : _width;
+            linePos = new double[n];
+            lineOp = new double[n];
+            for (var i = 0; i < n; i++)
+            {
+                var a = n <= 1 ? 0 : i / (double)(n - 1);
+                linePos[i] = rest + ElasticLine.Displacement(mode, a, cross, ms);
+                lineOp[i] = ElasticLine.Opacity(mode, a, cross, ms);
+            }
+        }
         for (var y = 0; y < _height; y += step)
         {
             for (var x = 0; x < _width; x += step)
             {
                 var along = longSide <= 1 ? 0 : (band.Edge is GlowEdge.Left or GlowEdge.Right ? y : x) / (double)(longSide - 1);
                 var push = _reduce ? 0 : Math.Clamp(_burst.Value, 0, 1);
-                var bow = Math.Sin(along * Math.PI) * push * 0.42;
+                var bow = linePos != null ? 0 : ElasticLine.Bell(along, cross) * push * 0.42;
                 var dist = Math.Clamp(EdgeDistance(band.Edge, x, y, _width, _height) - bow, 0, 1);
                 var ripple = push > 0.45 && Math.Abs(dist - (push - 0.45) / 0.55) < 0.08 ? 0.35 : 0;
                 var fall = Math.Exp(-dist * dist * 5.2);
@@ -279,9 +339,28 @@ public sealed class EdgeGlow : IDisposable
                 var breathe = 0.86 + 0.14 * Math.Sin(_phase * 0.65);
                 var alpha = (byte)Math.Clamp((int)(255 * peak * Math.Max(core * 0.45, fall + ripple) * travel * breathe), 0, 255);
                 var hot = dist < 0.18 ? 1.0 : 0.82;
-                var pb = (byte)Math.Clamp(b * hot * alpha / 255, 0, 255);
-                var pg = (byte)Math.Clamp(g * hot * alpha / 255, 0, 255);
-                var pr = (byte)Math.Clamp(r * hot * alpha / 255, 0, 255);
+                double cr = r * hot, cg = g * hot, cb = b * hot;
+                if (linePos != null && lineOp != null)
+                {
+                    // Under the elastic line, dim the static band so the line reads as one stroke.
+                    alpha = (byte)(alpha * 0.45);
+                    var idx = vertical ? y : x;
+                    var plain = EdgeDistance(band.Edge, x, y, _width, _height);
+                    var dd = plain - linePos[idx];
+                    var glow = lineOp[idx] * (Math.Exp(-dd * dd / (2 * lineCore * lineCore)) + 0.38 * Math.Exp(-dd * dd / (2 * lineHalo * lineHalo)));
+                    var la = Math.Clamp(glow, 0, 1) * 255;
+                    if (la > alpha)
+                    {
+                        var mix = la / 255.0;
+                        cr = cr * (1 - mix) + ar * mix + 60 * mix * Math.Exp(-dd * dd / (2 * lineCore * lineCore));
+                        cg = cg * (1 - mix) + ag * mix + 60 * mix * Math.Exp(-dd * dd / (2 * lineCore * lineCore));
+                        cb = cb * (1 - mix) + ab * mix + 60 * mix * Math.Exp(-dd * dd / (2 * lineCore * lineCore));
+                        alpha = (byte)la;
+                    }
+                }
+                var pb = (byte)Math.Clamp(cb * alpha / 255, 0, 255);
+                var pg = (byte)Math.Clamp(cg * alpha / 255, 0, 255);
+                var pr = (byte)Math.Clamp(cr * alpha / 255, 0, 255);
                 for (var yy = y; yy < Math.Min(_height, y + step); yy++)
                 {
                     for (var xx = x; xx < Math.Min(_width, x + step); xx++)

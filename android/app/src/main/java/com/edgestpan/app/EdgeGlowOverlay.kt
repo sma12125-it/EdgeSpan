@@ -16,6 +16,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import com.edgestpan.protocol.ElasticLine
 import com.edgestpan.protocol.ScreenEdge
 
 /**
@@ -32,6 +33,7 @@ class EdgeGlowOverlay(private val app: Context) {
     var onFinger: () -> Unit = {}
 
     fun show(edge: Int) {
+        crossGen++
         this.edge = edge
         running = true
         if (!listening) {
@@ -88,7 +90,7 @@ class EdgeGlowOverlay(private val app: Context) {
         val view = glow ?: GlowView(ctx).also { glow = it }
         view.edge = edge
         DisplaySize.ensure(ctx)
-        val thick = if (Motion.breakthrough(ctx)) (28f * DisplaySize.density).toInt().coerceIn(18, 48) else (4f * DisplaySize.density).toInt().coerceIn(3, 8)
+        val thick = if (Motion.breakthrough(ctx)) (56f * DisplaySize.density).toInt().coerceIn(36, 160) else (4f * DisplaySize.density).toInt().coerceIn(3, 8)
         val screenW = DisplaySize.width
         val screenH = DisplaySize.height
         if (screenW < 1 || screenH < 1) return
@@ -110,7 +112,10 @@ class EdgeGlowOverlay(private val app: Context) {
             wm.updateViewLayout(view, params)
         }
         ensureWatch(ctx, wm)
-        if (Motion.breakthrough(ctx)) view.burst(Motion.reduce(ctx))
+        pendingCross?.let { (mode, at) ->
+            pendingCross = null
+            view.play(mode, at, Motion.reduce(ctx))
+        }
         view.invalidate()
     }
 
@@ -187,19 +192,33 @@ class EdgeGlowOverlay(private val app: Context) {
         else -> WindowManager.LayoutParams.TYPE_PHONE
     }
 
-    fun ripple(edge: Int) {
+    private var pendingCross: Pair<Int, Double>? = null
+    private var crossGen = 0
+
+    /**
+     * One half of the shared elastic boundary at [along] (0..1 along [edge]).
+     * ENTER: stretched inward and torn, then hidden. EXIT: bulges outward and snaps back; [stay] keeps the glow shown.
+     */
+    fun cross(edge: Int, mode: Int, along: Double, stay: Boolean) {
         this.edge = edge
         running = true
+        if (!listening) {
+            listening = true
+            DisplaySize.listen { if (running) main.post { attach() } }
+        }
         main.post {
             try {
+                pendingCross = Pair(mode, along)
                 attach()
-                glow?.burst(Motion.reduce(app))
             } catch (thrown: Throwable) {
-                CrashLog.caught(app, "glow ripple", thrown)
+                CrashLog.caught(app, "glow cross", thrown)
             }
-            main.postDelayed({ if (running) hide() }, 360)
+            val gen = ++crossGen
+            if (!stay) main.postDelayed({ if (running && gen == crossGen) hide() }, ElasticLine.DurationMs.toLong() + 40)
         }
     }
+
+    fun ripple(edge: Int) = cross(edge, ElasticLine.ENTER, 0.5, false)
 
     private class GlowView(context: Context) : View(context) {
         var edge = ScreenEdge.Left
@@ -207,36 +226,33 @@ class EdgeGlowOverlay(private val app: Context) {
         private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
-            color = Color.argb(220, 61, 220, 132)
         }
-        private val spring = Spring1D(0.32, 0.72)
-        private var last = 0L
+        private var mode = ElasticLine.ENTER
+        private var along = 0.5
+        private var startedAt = 0L
         private var reduce = false
         private val frames = android.view.Choreographer.getInstance()
         private val tick = object : android.view.Choreographer.FrameCallback {
             override fun doFrame(time: Long) {
                 try {
-                    val dt = if (last == 0L) 0.016 else ((time - last) / 1_000_000_000.0).coerceIn(0.001, 0.05)
-                    last = time
-                    val done = spring.step(dt, reduce)
                     invalidate()
-                    if (!done) frames.postFrameCallback(this)
-                    else if (spring.target > 0.5) {
-                        spring.retarget(0.0)
-                        frames.postFrameCallback(this)
-                    }
+                    if (elapsed() < ElasticLine.DurationMs) frames.postFrameCallback(this)
                 } catch (thrown: RuntimeException) {
                     android.util.Log.w("EdgeSpan", "glow", thrown)
                 }
             }
         }
 
-        fun burst(reduceMotion: Boolean) {
+        private fun elapsed(): Double = if (startedAt == 0L) Double.MAX_VALUE else (SystemClock.uptimeMillis() - startedAt).toDouble()
+
+        /** Plays the shared elastic line at [at] (0..1 along the edge). */
+        fun play(mode: Int, at: Double, reduceMotion: Boolean) {
             try {
+                this.mode = mode
+                along = at.coerceIn(0.0, 1.0)
                 reduce = reduceMotion
-                spring.nudge(0.0)
-                spring.retarget(1.0)
-                last = 0
+                startedAt = if (reduceMotion) 0L else SystemClock.uptimeMillis()
+                frames.removeFrameCallback(tick)
                 frames.postFrameCallback(tick)
             } catch (thrown: RuntimeException) {
                 android.util.Log.w("EdgeSpan", "glow", thrown)
@@ -253,35 +269,64 @@ class EdgeGlowOverlay(private val app: Context) {
 
         private fun drawGlow(canvas: Canvas) {
             if (width < 1 || height < 1) return
-            val push = if (reduce) 0f else spring.value.toFloat().coerceIn(0f, 1f)
-            val solid = Color.argb(200, 61, 220, 132)
-            val clear = Color.argb(0, 61, 220, 132)
+            val ms = elapsed()
+            val crossing = ms < ElasticLine.DurationMs
+            val horizontal = edge == ScreenEdge.Top || edge == ScreenEdge.Bottom
+            val thick = (if (horizontal) height else width).toFloat()
+            val density = resources.displayMetrics.density
+            // Static band: a faint gradient sitting on the shared edge.
+            val solid = Color.argb(if (crossing) 70 else 150, 20, 184, 166)
+            val clear = Color.argb(0, 20, 184, 166)
+            val bandDepth = if (horizontal) height * 0.35f else width * 0.35f
             paint.shader = when (edge) {
-                ScreenEdge.Right -> LinearGradient(width.toFloat(), 0f, 0f, 0f, solid, clear, Shader.TileMode.CLAMP)
-                ScreenEdge.Bottom -> LinearGradient(0f, height.toFloat(), 0f, 0f, solid, clear, Shader.TileMode.CLAMP)
-                ScreenEdge.Top -> LinearGradient(0f, 0f, 0f, height.toFloat(), solid, clear, Shader.TileMode.CLAMP)
-                else -> LinearGradient(0f, 0f, width.toFloat(), 0f, solid, clear, Shader.TileMode.CLAMP)
+                ScreenEdge.Right -> LinearGradient(width.toFloat(), 0f, width - bandDepth, 0f, solid, clear, Shader.TileMode.CLAMP)
+                ScreenEdge.Bottom -> LinearGradient(0f, height.toFloat(), 0f, height - bandDepth, solid, clear, Shader.TileMode.CLAMP)
+                ScreenEdge.Top -> LinearGradient(0f, 0f, 0f, bandDepth, solid, clear, Shader.TileMode.CLAMP)
+                else -> LinearGradient(0f, 0f, bandDepth, 0f, solid, clear, Shader.TileMode.CLAMP)
             }
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-            line.strokeWidth = 3f * resources.displayMetrics.density
-            val path = android.graphics.Path()
-            val n = 28
-            val horizontal = edge == ScreenEdge.Top || edge == ScreenEdge.Bottom
-            for (i in 0..n) {
-                val t = i / n.toFloat()
-                val bow = kotlin.math.sin(t * Math.PI).toFloat() * push * (if (horizontal) height else width) * 0.55f
-                val x = if (horizontal) t * width else if (edge == ScreenEdge.Right) width - bow else bow
-                val y = if (!horizontal) t * height else if (edge == ScreenEdge.Bottom) height - bow else bow
-                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            if (!crossing) {
+                line.color = ElasticLine.Accent
+                line.alpha = 210
+                line.strokeWidth = 2.5f * density
+                val inset = line.strokeWidth / 2
+                when (edge) {
+                    ScreenEdge.Right -> canvas.drawLine(width - inset, 0f, width - inset, height.toFloat(), line)
+                    ScreenEdge.Bottom -> canvas.drawLine(0f, height - inset, width.toFloat(), height - inset, line)
+                    ScreenEdge.Top -> canvas.drawLine(0f, inset, width.toFloat(), inset, line)
+                    else -> canvas.drawLine(inset, 0f, inset, height.toFloat(), line)
+                }
+                return
             }
-            canvas.drawPath(path, line)
-            if (push > 0.45f) {
-                val ripple = (push - 0.45f) / 0.55f
-                line.alpha = ((1f - ripple) * 180).toInt()
-                val cx = width / 2f
-                val cy = height / 2f
-                canvas.drawCircle(cx, cy, (if (horizontal) height else width) * 0.35f * ripple, line)
-                line.alpha = 255
+            val rest = if (mode == ElasticLine.EXIT) 0.30 else 0.05
+            val n = 160
+            val long = (if (horizontal) width else height).toFloat()
+            fun point(i: Int): Pair<Float, Float> {
+                val a = i / n.toDouble()
+                val d = ((rest + ElasticLine.displacement(mode, a, along, ms)) * thick).toFloat()
+                val p = (a * long).toFloat()
+                return when (edge) {
+                    ScreenEdge.Right -> Pair(width - d, p)
+                    ScreenEdge.Bottom -> Pair(p, height - d)
+                    ScreenEdge.Top -> Pair(p, d)
+                    else -> Pair(d, p)
+                }
+            }
+            // Two passes: wide soft halo, then a bright core. Segment alpha carries the tear gap.
+            for (pass in 0..1) {
+                line.color = if (pass == 0) ElasticLine.Accent else Color.rgb(140, 240, 225)
+                line.strokeWidth = if (pass == 0) 9f * density else 2.4f * density
+                val peak = if (pass == 0) 70 else 255
+                var prev = point(0)
+                for (i in 1..n) {
+                    val next = point(i)
+                    val op = ElasticLine.opacity(mode, (i - 0.5) / n, along, ms)
+                    if (op > 0.01) {
+                        line.alpha = (peak * op).toInt().coerceIn(0, 255)
+                        canvas.drawLine(prev.first, prev.second, next.first, next.second, line)
+                    }
+                    prev = next
+                }
             }
         }
     }

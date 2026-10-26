@@ -37,7 +37,7 @@ public abstract record Effect
 {
     public sealed record Log(string Message) : Effect;
     public sealed record StateChanged : Effect;
-    public sealed record ControlChanged(string? DeviceId, int X, int Y) : Effect;
+    public sealed record ControlChanged(string? DeviceId, int X, int Y, int DevW = 0, int DevH = 0) : Effect;
     public sealed record ModifiersReleased : Effect;
     public sealed record HandoffAccepted(string DeviceId, uint Id, byte Codec, int ViewW, int ViewH) : Effect;
     public sealed record HandoffGeometry(uint Id, int X, int Y, int PhysW, int PhysH) : Effect;
@@ -1288,7 +1288,7 @@ public sealed class HostController : IDisposable
         else
             ReleaseModifiers(null, includeHeldKeys: false);
         _effects.Add(new Effect.WarpCursor(entered.ParkX, entered.ParkY));
-        _effects.Add(new Effect.ControlChanged(entered.DeviceId, entered.X, entered.Y));
+        _effects.Add(new Effect.ControlChanged(entered.DeviceId, entered.X, entered.Y, entered.DevW, entered.DevH));
         Touch();
     }
 
