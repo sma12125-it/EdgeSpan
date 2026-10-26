@@ -55,7 +55,7 @@ class ClientEngine(
         private set
     var returnEdge = ScreenEdge.Left
     /** Diagnostic sink for edge exits and size changes. */
-    var trace: ((String) -> Unit)? = null
+    var exitTrace: ((String) -> Unit)? = null
         private set
     val out = ArrayList<ByteArray>()
     var onEvent: (ClientEvent) -> Unit = {}
@@ -128,7 +128,7 @@ class ClientEngine(
 
     fun updateScreen(w: Int, h: Int) {
         if (w < 1 || h < 1 || (w == screenW && h == screenH)) return
-        trace?.invoke("screen-size ${screenW}x$screenH -> ${w}x$h")
+        exitTrace?.invoke("screen-size ${screenW}x$screenH -> ${w}x$h")
         screenW = w
         screenH = h
         x = x.coerceIn(0, w - 1)
@@ -242,7 +242,7 @@ class ClientEngine(
                 y = placed.second
                 onEvent(ClientEvent.Mouse(x, y))
                 if (!locked && EdgeGuard.crosses(returnEdge, rawX, rawY, screenW, screenH, prevX, prevY)) {
-                    trace?.invoke("edge-exit device edge=$returnEdge prev=($prevX,$prevY) raw=($rawX,$rawY) size=${screenW}x$screenH")
+                    exitTrace?.invoke("edge-exit device edge=$returnEdge prev=($prevX,$prevY) raw=($rawX,$rawY) size=${screenW}x$screenH")
                     releaseModifiers()
                     hasControl = false
                     queueReliable(PacketType.EdgeReturn, Payloads.edgeReturn(Int.MIN_VALUE, Int.MIN_VALUE, x, y), now)

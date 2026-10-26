@@ -457,7 +457,7 @@ class PhoneSession(
     }
 
     private fun engine(id: String, name: String, width: Int, height: Int) =
-        ClientEngine(id, name, width, height) { SystemClock.elapsedRealtime() }.also { e -> e.trace = { Log.i(TAG, it) } }
+        ClientEngine(id, name, width, height) { SystemClock.elapsedRealtime() }.also { e -> e.exitTrace = { Log.i(TAG, it) } }
 
     private var hailed = false
 
