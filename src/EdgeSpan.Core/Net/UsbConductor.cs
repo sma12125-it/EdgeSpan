@@ -187,8 +187,11 @@ public sealed class UsbConductor
             Note("uhid-dex-missing");
             return;
         }
+        // Only keep a running server that was started from this exact dex: an older build
+        // (e.g. 0.9.13, whose dex lacked the protocol classes) must be replaced after an update.
+        var stamp = DexStamp(dex);
         var alive = await Call(adb, token, "-s", serial, "shell", "sh", "-c",
-            "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill -0 $pid 2>/dev/null && echo server-alive");
+            "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill -0 $pid 2>/dev/null && [ \"$(cat /data/local/tmp/edgestpan-server.stamp 2>/dev/null)\" = \"" + stamp + "\" ] && echo server-alive");
         if ((alive.Text ?? "").Contains("server-alive", StringComparison.Ordinal))
         {
             // Keep the running server so a connected phone keeps its injection socket.
@@ -196,6 +199,7 @@ public sealed class UsbConductor
             Note("uhid-kept");
             return;
         }
+        Note("uhid-restart stamp=" + stamp);
         await Call(adb, token, "-s", serial, "shell", "sh", "-c", "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill $pid");
         var pushed = await Call(adb, token, "-s", serial, "push", dex, "/data/local/tmp/edgestpan-server.dex");
         if (pushed.Code != 0 || pushed.TimedOut)
@@ -205,13 +209,23 @@ public sealed class UsbConductor
             return;
         }
         var started = await Call(adb, token, "-s", serial, "shell", "sh", "-c",
-            "rm -f /data/local/tmp/edgestpan-server.log; CLASSPATH=/data/local/tmp/edgestpan-server.dex setsid app_process / com.edgestpan.server.ServerMain >/data/local/tmp/edgestpan-server.log 2>&1 </dev/null & echo $! > /data/local/tmp/edgestpan-server.pid; echo uhid-started");
+            "rm -f /data/local/tmp/edgestpan-server.log; CLASSPATH=/data/local/tmp/edgestpan-server.dex setsid app_process / com.edgestpan.server.ServerMain >/data/local/tmp/edgestpan-server.log 2>&1 </dev/null & echo $! > /data/local/tmp/edgestpan-server.pid; echo " + stamp + " > /data/local/tmp/edgestpan-server.stamp; echo uhid-started");
         if (started.TimedOut)
             Note("uhid-start-timeout");
-        await Pause(700, token);
-        var log = await Call(adb, token, "-s", serial, "shell", "cat", "/data/local/tmp/edgestpan-server.log");
-        var body = log.Text ?? "";
-        if (body.Contains("edgestpan-server", StringComparison.Ordinal) && !body.Contains("uhid-denied", StringComparison.Ordinal))
+        // app_process + dex verification can take well over the old fixed 700 ms on a Tab S6,
+        // which logged "uhid-denied" with an empty log although the server came up later.
+        var body = "";
+        for (var i = 0; i < 10; i++)
+        {
+            await Pause(i == 0 ? 500 : 400, token);
+            var log = await Call(adb, token, "-s", serial, "shell", "cat", "/data/local/tmp/edgestpan-server.log");
+            body = log.Text ?? "";
+            if (body.Contains("mouse-relative", StringComparison.Ordinal) || body.Contains("uhid-denied", StringComparison.Ordinal)
+                || body.Contains("Exception", StringComparison.Ordinal) || body.Contains("Error", StringComparison.Ordinal))
+                break;
+        }
+        Note("uhid-log " + string.Join(" | ", (body ?? "").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Take(4)));
+        if (body.Contains("mouse-relative", StringComparison.Ordinal) && !body.Contains("uhid-denied", StringComparison.Ordinal))
         {
             Inject?.Invoke("injectUhid");
             Note("uhid-ready");
@@ -220,6 +234,20 @@ public sealed class UsbConductor
         {
             Inject?.Invoke("injectDown");
             Note("uhid-denied " + First(body));
+        }
+    }
+
+    private static string DexStamp(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var hash = System.Security.Cryptography.SHA256.HashData(stream);
+            return Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
+        }
+        catch (IOException)
+        {
+            return "unknown";
         }
     }
 

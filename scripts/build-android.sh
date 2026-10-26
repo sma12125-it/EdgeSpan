@@ -19,7 +19,7 @@ if [[ ! -f "$ks" ]]; then
     -keyalg RSA -keysize 2048 -validity 10000 \
     -dname "CN=EdgeSpan Dev, OU=EdgeSpan, O=EdgeSpan, L=Test, ST=Test, C=US"
 fi
-./gradlew :protocol:test :server-core:test :server-core:jar --no-daemon
+./gradlew :protocol:test :server-core:test :server-core:jar :protocol:jar --no-daemon
 
 d8=""
 if command -v d8 >/dev/null 2>&1; then
@@ -43,7 +43,19 @@ mkdir -p "$server_dir/dex"
 "$d8" --min-api 24 --lib "$sdk/platforms/android-34/android.jar" \
   --output "$server_dir/dex" \
   "$root/android/server-core/build/libs/server-core.jar" \
+  "$root/android/protocol/build/libs/protocol.jar" \
   "$stdlib"
+# The server imports com.edgestpan.protocol (PointerBounds). Without protocol.jar in the dex the
+# server died with NoClassDefFoundError on the phone's first hello, so USB always fell back to
+# the accessibility cursor. Fail the build if that class is missing again.
+if ! grep -aq "Lcom/edgestpan/protocol/PointerBounds;" "$server_dir/dex/classes.dex"; then
+  echo "server dex is missing com.edgestpan.protocol.PointerBounds" >&2
+  exit 1
+fi
+if ! grep -aq "Lcom/edgestpan/server/SystemInput;" "$server_dir/dex/classes.dex"; then
+  echo "server dex is missing SystemInput" >&2
+  exit 1
+fi
 cp "$server_dir/dex/classes.dex" "$server_dir/edgestpan-server.dex"
 # A zip entry whose name ends in .dex is dexopted by some package installers,
 # which stalls on "Installing...". Ship the same bytes under a non-dex name.

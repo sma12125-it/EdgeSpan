@@ -14,7 +14,7 @@ public class UsbSetupTests
                 return new AdbCall(0, "List of devices attached\nemulator-5554\tdevice\n", false);
             if (line.Contains("reverse tcp:45455"))
                 return new AdbCall(0, "", false);
-            return new AdbCall(0, line.Contains("cat ") ? "edgestpan-server ready\n" : "", false);
+            return new AdbCall(0, line.Contains("cat ") ? "edgestpan-server mouse-relative 27183 uhid=true\n" : "", false);
         });
         var hooks = new Probe();
         hooks.ConnectedAfter = "usb-launch";
@@ -68,7 +68,7 @@ public class UsbSetupTests
                 return new AdbCall(0, "List of devices attached\nemulator-5554\tdevice\n", false);
             }
             if (line.Contains("cat "))
-                return new AdbCall(0, "edgestpan-server ready\n", false);
+                return new AdbCall(0, "edgestpan-server mouse-relative 27183 uhid=true\n", false);
             return new AdbCall(0, "", false);
         });
         var hooks = new Probe { ConnectedAfter = "usb-launch" };

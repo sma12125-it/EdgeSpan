@@ -31,6 +31,30 @@ class AdbInjector(private val context: android.content.Context? = null) : Inject
     /** True while the socket to the UHID injection server is usable. */
     val alive: Boolean get() = out != null && socket?.isClosed == false
 
+    /** Path the server reported in its hello ack: 0 none yet, 1 UHID, 2 InputManager. */
+    @Volatile var serverMode: Int = 0
+        private set
+    private val ackLock = Object()
+
+    /** Waits for the server's hello ack (proves the server reads this socket and did not crash). */
+    fun awaitAck(timeoutMs: Long, wanted: Int = 0): Boolean {
+        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
+        synchronized(ackLock) {
+            while (alive && (serverMode == 0 || (wanted != 0 && serverMode != wanted))) {
+                val left = deadline - android.os.SystemClock.elapsedRealtime()
+                if (left <= 0) break
+                ackLock.wait(left)
+            }
+        }
+        return alive && serverMode != 0 && (wanted == 0 || serverMode == wanted)
+    }
+
+    /** Asks the server to inject through InputManager (SOURCE_MOUSE / KeyEvent) instead of UHID. */
+    fun useSystemInput(): Boolean {
+        write(8, ByteArray(0))
+        return awaitAck(800, wanted = 2)
+    }
+
     fun connect(width: Int, height: Int, port: Int = 27183): Boolean = try {
         val s = Socket()
         s.connect(InetSocketAddress("127.0.0.1", port), 400)
@@ -47,10 +71,27 @@ class AdbInjector(private val context: android.content.Context? = null) : Inject
             try {
                 val input = s.getInputStream()
                 val header = ByteArray(3)
-                while (!s.isClosed) {
-                    if (input.read(header) < 3) break
-                    if ((header[2].toInt() and 0xff) == 9) EdgeGlowOverlay.fingerFromServer()
+                fun full(buf: ByteArray): Boolean {
+                    var n = 0
+                    while (n < buf.size) { val got = input.read(buf, n, buf.size - n); if (got < 0) return false; n += got }
+                    return true
                 }
+                while (!s.isClosed) {
+                    if (!full(header)) break
+                    val len = (header[0].toInt() and 0xff) or ((header[1].toInt() and 0xff) shl 8)
+                    val body = ByteArray((len - 1).coerceAtLeast(0))
+                    if (body.isNotEmpty() && !full(body)) break
+                    when (header[2].toInt() and 0xff) {
+                        9 -> EdgeGlowOverlay.fingerFromServer()
+                        2 -> if (body.isNotEmpty()) {
+                            synchronized(ackLock) { serverMode = body[0].toInt() and 0xff; ackLock.notifyAll() }
+                            context?.let { CrashLog.note(it, "injection server ack mode=${serverMode}") }
+                        }
+                    }
+                }
+                context?.let { CrashLog.note(it, "injection server closed the socket") }
+                out = null
+                synchronized(ackLock) { ackLock.notifyAll() }
             } catch (thrown: Throwable) {
                 android.util.Log.e("EdgeSpan", "finger reader", thrown)
             }
@@ -282,9 +323,17 @@ class InjectorRouter(
         adb?.close()
         val (w, h) = size()
         val fresh = AdbInjector(context)
-        val ok = fresh.connect(w, h)
+        val connected = fresh.connect(w, h)
+        // A TCP connect alone is not proof: the server must ack the hello (an old server dex
+        // crashed on hello and left a socket that accepted writes that went nowhere).
+        val ok = connected && fresh.awaitAck(900)
+        if (!ok) fresh.close()
         adb = if (ok) fresh else null
-        CrashLog.note(context, if (ok) "uhid-connected" else "uhid-unavailable")
+        CrashLog.note(context, when {
+            ok -> "inject step: server connected, ack mode=${fresh.serverMode} (${w}x$h)"
+            connected -> "inject step: server accepted the socket but sent no hello ack in 900 ms (old or crashed server)"
+            else -> "inject step: no server on 127.0.0.1:27183 (USB setup from Windows not done or server died)"
+        })
         return ok
     }
 
@@ -317,22 +366,40 @@ class InjectorRouter(
         return made
     }
 
-    private fun adbAliveWithMouse() = ensureAdb() && mousePresent()
+    private fun adbAliveWithMouse(): Boolean {
+        if (!ensureAdb()) return false
+        val a = adb ?: return false
+        if (a.serverMode == 2) return true
+        if (mousePresent()) return true
+        // Wait a little for InputManager to register the UHID mouse before giving up on it.
+        val deadline = android.os.SystemClock.elapsedRealtime() + 600
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            Thread.sleep(60)
+            if (mousePresent()) return true
+        }
+        CrashLog.note(context, "inject step: UHID mouse device not registered; asking server for InputManager injection")
+        val switched = a.useSystemInput()
+        CrashLog.note(context, if (switched) "inject step: server switched to InputManager (SOURCE_MOUSE/KeyEvent)" else "inject step: server could not switch to InputManager")
+        return switched
+    }
+
+    private var limitedShown = false
 
     private fun select(): Injector? {
         val chosen: Injector?
         if (adbAliveWithMouse()) {
-            chosen = adb; path = "uhid"
+            chosen = adb; path = if (adb?.serverMode == 2) "inputmanager" else "uhid"
         } else {
+            // Last resort only: overlay cursor + gestures cannot click, drag or type properly.
             val a = currentAccess()
             if (a != null) {
                 chosen = a; path = "accessibility"
-            } else if (adb?.alive == true) {
-                chosen = adb; path = "uhid-unverified"
+                if (!limitedShown) { limitedShown = true; InjectAlert.limited(context) }
             } else {
                 chosen = null; path = "none"
             }
         }
+        if (path != "accessibility") limitedShown = false
         CrashLog.note(context, "injector path=$path adbAllowed=$adbAllowed adbAlive=${adb?.alive == true} mouse=${runCatching { mousePresent() }.getOrDefault(false)} access=${EdgeAccessibility.instance != null} accessEnabled=${EdgeAccessibility.isEnabled(context)}")
         if (pointer !== chosen && pointer is AccessInjector) pointer?.hidePointer()
         pointer = chosen
@@ -380,6 +447,36 @@ class InjectorRouter(
 /** User-facing alert when no injection path works. */
 object InjectAlert {
     private const val Channel = "edgestpan-alert"
+
+    /** Accessibility overlay fallback is active: warn that clicks, drag and keyboard are limited. */
+    fun limited(context: android.content.Context) {
+        val text = "Limited mode: USB input server not available – clicks, drag and keyboard won't work properly. Reconnect USB from Windows."
+        CrashLog.note(context, "limited mode (accessibility overlay cursor)")
+        notify(context, "EdgeSpan is in limited mode", text, android.content.Intent(context, MainActivity::class.java), 13)
+        Handler(Looper.getMainLooper()).post {
+            runCatching { android.widget.Toast.makeText(context.applicationContext, text, android.widget.Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    private fun notify(context: android.content.Context, title: String, text: String, intent: android.content.Intent, id: Int) {
+        try {
+            val manager = context.getSystemService(android.app.NotificationManager::class.java) ?: return
+            manager.createNotificationChannel(android.app.NotificationChannel(Channel, "EdgeSpan alerts", android.app.NotificationManager.IMPORTANCE_HIGH))
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            val pending = android.app.PendingIntent.getActivity(context, id, intent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+            val note = android.app.Notification.Builder(context, Channel)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(android.app.Notification.BigTextStyle().bigText(text))
+                .setSmallIcon(R.drawable.ic_stat_edgestpan)
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .build()
+            manager.notify(id, note)
+        } catch (thrown: Throwable) {
+            CrashLog.caught(context, "inject alert", thrown)
+        }
+    }
 
     fun show(context: android.content.Context, reason: String) {
         val accessOff = reason == "access-off" || reason == "unbound" || reason == "overlay"
