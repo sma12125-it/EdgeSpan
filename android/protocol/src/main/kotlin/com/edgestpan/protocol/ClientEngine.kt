@@ -54,9 +54,9 @@ class ClientEngine(
     var y = 0
         private set
     var returnEdge = ScreenEdge.Left
+        private set
     /** Diagnostic sink for edge exits and size changes. */
     var exitTrace: ((String) -> Unit)? = null
-        private set
     val out = ArrayList<ByteArray>()
     var onEvent: (ClientEvent) -> Unit = {}
     private val heldModifiers = HashSet<Int>()
