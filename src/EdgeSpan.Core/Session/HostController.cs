@@ -212,6 +212,7 @@ public sealed class HostController : IDisposable
             }
             MonitorKey = key;
             ReloadLayout();
+            Save();
             Touch();
         }
     }

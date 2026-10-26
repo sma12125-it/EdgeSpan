@@ -63,6 +63,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public MainViewModel(SessionRuntime runtime)
     {
         _runtime = runtime;
+        _boundPort = runtime.Host.Settings.ListenPort;
+        RestartCommand = new RelayCommand(RestartApp);
+        _autosave = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _autosave.Tick += (_, _) => AutosaveTick();
+        _autosave.Start();
         ShowConnectCommand = new RelayCommand(() => Page = 7);
         ShowOverviewCommand = new RelayCommand(() => Page = 0);
         ShowDevicesCommand = new RelayCommand(() => Page = 1);
@@ -101,6 +106,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OpenSamsungCommand = new RelayCommand(OpenSamsung);
         ExportLogCommand = new RelayCommand(ExportLog);
         SimulateLeaveCommand = new RelayCommand(SimulateLeave);
+        DetectCommand = new RelayCommand(DetectMonitors);
+        IdentifyCommand = new RelayCommand(() => IdentifyRequested?.Invoke());
         SimulateReturnCommand = new RelayCommand(SimulateReturn);
         ApplyLanguage();
         Page = 7;
@@ -214,6 +221,131 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand OpenSamsungCommand { get; }
     public RelayCommand ExportLogCommand { get; }
     public RelayCommand SimulateLeaveCommand { get; }
+    public RelayCommand DetectCommand { get; }
+    public RelayCommand RestartCommand { get; }
+
+    // Windows 11-style auto-save: every form change persists on its own (no Save button). Toggles/combos
+    // are written on the next tick; text and number fields once they have been stable for 500 ms.
+    private readonly Avalonia.Threading.DispatcherTimer _autosave;
+    private readonly int _boundPort;
+    private string _settingsSig = "";
+    private string _deviceSig = "";
+    private string _pendingSettings = "";
+    private string _pendingDevice = "";
+    private long _settingsChangedAt;
+    private long _deviceChangedAt;
+    private long _savedAt;
+    public bool RestartRequired { get; private set; }
+    public bool ShowSaved => _savedAt > 0 && Environment.TickCount64 - _savedAt < 1800;
+
+    private string SettingsSig() => string.Join("\u001f", DisplayName, ListenPort, ClipboardShare, FileTransfer, LaunchAtStartup,
+        HotkeySwitch, HotkeyLock, HotkeySwitchEnabled, DeviceNumberHotkeys, EdgeGlowEnabled, EdgeGlowColor, EdgeGlowIntensity,
+        EdgeGlowThickness, BreakthroughEnabled, BreakthroughIntensity, ReduceMotion, SoundEnabled, InternetEnabled, HandoffPc,
+        RelayUrl, StunHost, StunPort, PublicHost, PublicPort);
+
+    private string DeviceSig() => _selected == null ? "" : string.Join("\u001f", _selected.Id, EditName, EditAddress, EditPort,
+        EditWidth, EditHeight, PcEdgeIndex, ReturnEdgeIndex, AnchorIndex, CornerIndex, EditOffset, EditSpan, EditCornerSize, EditSpeed);
+
+    private string SettingsFlags() => string.Join(",", ClipboardShare, FileTransfer, LaunchAtStartup, HotkeySwitchEnabled,
+        DeviceNumberHotkeys, EdgeGlowEnabled, BreakthroughEnabled, ReduceMotion, SoundEnabled, InternetEnabled, HandoffPc);
+
+    private string DeviceFlags() => string.Join(",", _selected?.Id, PcEdgeIndex, ReturnEdgeIndex, AnchorIndex, CornerIndex);
+
+    private string _flagsSig = "";
+    private string _deviceFlagsSig = "";
+
+    private void ResetAutosave()
+    {
+        _settingsSig = _pendingSettings = SettingsSig();
+        _deviceSig = _pendingDevice = DeviceSig();
+        _flagsSig = SettingsFlags();
+        _deviceFlagsSig = DeviceFlags();
+    }
+
+    private void AutosaveTick()
+    {
+        var now = Environment.TickCount64;
+        if (_settingsSig.Length == 0)
+        {
+            ResetAutosave();
+            return;
+        }
+        var s = SettingsSig();
+        if (s != _pendingSettings)
+        {
+            // Bool/combos (same text length) save at once; typed fields wait for 500 ms of quiet.
+            _settingsChangedAt = SettingsFlags() != _flagsSig ? now - 500 : now;
+            _pendingSettings = s;
+        }
+        if (s != _settingsSig && now - _settingsChangedAt >= 500)
+        {
+            SaveSettings();
+            _settingsSig = _pendingSettings = SettingsSig();
+            _flagsSig = SettingsFlags();
+            MarkSaved();
+        }
+        var d = DeviceSig();
+        if (d != _pendingDevice)
+        {
+            _deviceChangedAt = DeviceFlags() != _deviceFlagsSig ? now - 500 : now;
+            _pendingDevice = d;
+        }
+        if (d != _deviceSig && now - _deviceChangedAt >= 500)
+        {
+            if (_selected != null && _deviceSig.StartsWith(_selected.Id, StringComparison.Ordinal))
+            {
+                SaveDevice();
+                MarkSaved();
+            }
+            _deviceSig = _pendingDevice = DeviceSig();
+            _deviceFlagsSig = DeviceFlags();
+        }
+        if (_savedAt > 0 && now - _savedAt >= 1800)
+        {
+            _savedAt = 0;
+            Notify(nameof(ShowSaved));
+        }
+    }
+
+    private void MarkSaved()
+    {
+        _savedAt = Environment.TickCount64;
+        // The UDP/TCP listeners bind once at start; a new port needs a restart (everything else applies live).
+        RestartRequired = _runtime.Host.Settings.ListenPort != _boundPort;
+        Notify(nameof(ShowSaved));
+        Notify(nameof(RestartRequired));
+    }
+
+    private void RestartApp()
+    {
+        var exe = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exe))
+            return;
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
+        Environment.Exit(0);
+    }
+    public RelayCommand IdentifyCommand { get; }
+    public event Action? IdentifyRequested;
+
+    /// <summary>Windows monitors at their real virtual-desktop positions (Arrange map).</summary>
+    public IReadOnlyList<EdgeSpan.Layout.HostMonitor> Monitors { get; private set; } = Array.Empty<EdgeSpan.Layout.HostMonitor>();
+    public string? SelectedDeviceId => _selected?.Id;
+    public string ArrangeNote { get; private set; } = "";
+    public bool HasArrangeNote => ArrangeNote.Length > 0;
+
+    private void DetectMonitors()
+    {
+        if (OperatingSystem.IsWindows())
+            _runtime.Host.SetHostMonitors(EdgeSpan.Windows.Services.WindowsInputCapture.EnumerateMonitors());
+        Pull();
+    }
+
+    public void SelectDeviceById(string id)
+    {
+        var row = Devices.FirstOrDefault(d => d.Id == id);
+        if (row != null)
+            SelectedDevice = row;
+    }
     public RelayCommand SimulateReturnCommand { get; }
 
     public string ProductName => ProductInfo.Name;
@@ -486,6 +618,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         var snaps = host.SnapshotDevices();
         LayoutDevices = snaps;
         ActiveDeviceId = host.Machine.ActiveDeviceId;
+        Monitors = host.SnapshotMonitors();
+        ArrangeNote = BuildArrangeNote(host, lang);
         var seen = snaps.Select(s => s.Id).ToHashSet();
         for (var i = Devices.Count - 1; i >= 0; i--)
         {
@@ -606,7 +740,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ShowLanTools = _runtime.ActiveMethod == "lan" && ConnectPhase != "connected";
         ShowRelayTools = _runtime.ActiveMethod == "relay" && ConnectPhase != "connected";
         NotifyMany(
-            nameof(LayoutDevices), nameof(ActiveDeviceId), nameof(StatusText), nameof(ListenText),
+            nameof(LayoutDevices), nameof(ActiveDeviceId), nameof(Monitors), nameof(SelectedDeviceId), nameof(ArrangeNote), nameof(HasArrangeNote),
+            nameof(StatusText), nameof(ListenText),
             nameof(ActiveText), nameof(LockText), nameof(LockButton), nameof(RttText), nameof(PacketText),
             nameof(PathText), nameof(LicenseText), nameof(ProblemText), nameof(HasProblems), nameof(PinText),
             nameof(PairingVisible), nameof(PairingState), nameof(NoDevices), nameof(HasBindError),
@@ -821,11 +956,40 @@ public sealed class MainViewModel : INotifyPropertyChanged
             nameof(StunPort), nameof(PublicHost), nameof(PublicPort), nameof(LicenseKey));
     }
 
-    public void PlaceDevice(string id, string edge, string anchor, string corner, int offset)
+    private static string BuildArrangeNote(EdgeSpan.Session.HostController host, string lang)
+    {
+        var monitors = host.Machine.Monitors;
+        foreach (var p in host.Machine.Devices)
+        {
+            if (host.Machine.NeighborFor(p) is not { } next)
+                continue;
+            var a = Index(monitors, host.Machine.MonitorFor(p)) + 1;
+            var b = Index(monitors, next) + 1;
+            return lang == "fa"
+                ? $"{p.Name} بین نمایشگر {a} و {b} قرار دارد: در این بخش از لبه، نشانگر به‌جای رفتن مستقیم به نمایشگر {b} از {p.Name} عبور می‌کند."
+                : $"{p.Name} sits between monitor {a} and {b}: on that part of the edge the cursor no longer goes straight to monitor {b}; it passes through {p.Name} instead.";
+        }
+        return "";
+    }
+
+    private static int Index(IReadOnlyList<EdgeSpan.Layout.HostMonitor> all, EdgeSpan.Layout.HostMonitor m)
+    {
+        for (var i = 0; i < all.Count; i++)
+            if (all[i] == m)
+                return i;
+        return 0;
+    }
+
+    public void PlaceDevice(string id, string edge, string anchor, string corner, int offset) =>
+        PlaceDevice(id, null, edge, anchor, corner, offset);
+
+    public void PlaceDevice(string id, string? monitor, string edge, string anchor, string corner, int offset)
     {
         var current = _runtime.Host.Settings.Devices.FirstOrDefault(d => d.Id == id);
         if (current == null)
             return;
+        if (monitor != null)
+            current.Monitor = monitor;
         current.PcEdge = edge;
         current.Anchor = anchor;
         current.Corner = corner;

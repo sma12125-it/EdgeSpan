@@ -3,9 +3,12 @@ namespace EdgeSpan.Product;
 public static class ProductInfo
 {
     public const string Name = "EdgeSpan";
-    public const string Version = "0.9.13";
-    public const int VersionCode = 30;
-    public const string BuildDate = "2026-10-25";
+    // Derived from <Version> in Directory.Build.props so the UI, diagnostics and installer never disagree.
+    public static readonly string Version =
+        (System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(ProductInfo).Assembly)
+            ?.InformationalVersion ?? "0.9.14").Split('+')[0];
+    public const int VersionCode = 33;
+    public const string BuildDate = "2026-10-26";
     public const int ProtocolVersion = 1;
     public const int DiscoveryPort = 45454;
     public const int DefaultSessionPort = 45455;

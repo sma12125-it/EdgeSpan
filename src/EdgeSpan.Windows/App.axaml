@@ -10,13 +10,14 @@
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="BgBrush" Color="#202020"/>
           <SolidColorBrush x:Key="SideBrush" Color="Transparent"/>
-          <SolidColorBrush x:Key="CardBrush" Color="#0DFFFFFF"/>
-          <SolidColorBrush x:Key="CardHoverBrush" Color="#15FFFFFF"/>
+          <SolidColorBrush x:Key="CardBrush" Color="#2B2B2B"/>
+          <SolidColorBrush x:Key="MapBrush" Color="#202020"/>
+          <SolidColorBrush x:Key="CardHoverBrush" Color="#323232"/>
           <SolidColorBrush x:Key="CardSolidBrush" Color="#2B2B2B"/>
           <SolidColorBrush x:Key="InkBrush" Color="#FFFFFF"/>
           <SolidColorBrush x:Key="MutedBrush" Color="#C5C5C5"/>
           <SolidColorBrush x:Key="LineBrush" Color="#1A000000"/>
-          <SolidColorBrush x:Key="CardLineBrush" Color="#19000000"/>
+          <SolidColorBrush x:Key="CardLineBrush" Color="#1D1D1D"/>
           <SolidColorBrush x:Key="NavHoverBrush" Color="#0FFFFFFF"/>
           <SolidColorBrush x:Key="NavSelectedBrush" Color="#0FFFFFFF"/>
           <SolidColorBrush x:Key="AccentBrush" Color="#7D9BFF"/>
@@ -30,13 +31,14 @@
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="BgBrush" Color="#F3F3F3"/>
           <SolidColorBrush x:Key="SideBrush" Color="Transparent"/>
-          <SolidColorBrush x:Key="CardBrush" Color="#B3FFFFFF"/>
-          <SolidColorBrush x:Key="CardHoverBrush" Color="#80F9F9F9"/>
+          <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF"/>
+          <SolidColorBrush x:Key="MapBrush" Color="#F3F3F3"/>
+          <SolidColorBrush x:Key="CardHoverBrush" Color="#FBFBFB"/>
           <SolidColorBrush x:Key="CardSolidBrush" Color="#FFFFFF"/>
           <SolidColorBrush x:Key="InkBrush" Color="#1A1A1A"/>
           <SolidColorBrush x:Key="MutedBrush" Color="#5D5D5D"/>
           <SolidColorBrush x:Key="LineBrush" Color="#0F000000"/>
-          <SolidColorBrush x:Key="CardLineBrush" Color="#0F000000"/>
+          <SolidColorBrush x:Key="CardLineBrush" Color="#E5E5E5"/>
           <SolidColorBrush x:Key="NavHoverBrush" Color="#09000000"/>
           <SolidColorBrush x:Key="NavSelectedBrush" Color="#0F000000"/>
           <SolidColorBrush x:Key="AccentBrush" Color="#3B6CFF"/>
@@ -44,7 +46,7 @@
           <SolidColorBrush x:Key="MintBrush" Color="#0F9488"/>
           <SolidColorBrush x:Key="GoldBrush" Color="#A87408"/>
           <SolidColorBrush x:Key="IconBrush" Color="#1A1A1A"/>
-          <SolidColorBrush x:Key="SearchBrush" Color="#B3FFFFFF"/>
+          <SolidColorBrush x:Key="SearchBrush" Color="#FFFFFF"/>
           <SolidColorBrush x:Key="PinCardBrush" Color="#1414B8A6"/>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>

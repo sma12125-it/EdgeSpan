@@ -347,7 +347,7 @@
   "themeSystem": {"en": "Use system setting", "fa": "مطابق سیستم"},
   "themeHint": {"en": "Light or dark, or follow Windows", "fa": "روشن، تیره یا مطابق ویندوز"},
   "langHint": {"en": "Interface language", "fa": "زبان رابط کاربری"},
-  "arrangeHint": {"en": "Drag your tablet to the edge it sits next to", "fa": "تبلت را به لبه‌ای که کنار آن است بکشید"},
+  "arrangeHint": {"en": "Select a screen and drag it to rearrange. Drop your tablet on any edge of any monitor, or between two monitors.", "fa": "صفحه را انتخاب کنید و بکشید. تبلت را روی هر لبهٔ هر نمایشگر یا بین دو نمایشگر رها کنید."},
   "placement": {"en": "Placement and motion", "fa": "جایگاه و حرکت"},
   "placementHint": {"en": "Edges, corners, offset and pointer speed", "fa": "لبه‌ها، گوشه‌ها، جابه‌جایی و سرعت نشانگر"},
   "pairedDevices": {"en": "Paired devices", "fa": "دستگاه‌های جفت‌شده"},
@@ -363,5 +363,11 @@
   "licenseSection": {"en": "License", "fa": "مجوز"},
   "connectedState": {"en": "Connected", "fa": "متصل"},
   "statusSection": {"en": "Status", "fa": "وضعیت"},
-  "quickActions": {"en": "Quick actions", "fa": "اقدامات سریع"}
+  "quickActions": {"en": "Quick actions", "fa": "اقدامات سریع"},
+  "restartRequired": {"en": "Restart required to use the new port", "fa": "برای استفاده از درگاه جدید، راه‌اندازی مجدد لازم است"},
+  "restartNow": {"en": "Restart now", "fa": "راه‌اندازی مجدد"},
+  "savedChip": {"en": "Saved", "fa": "ذخیره شد"},
+  "identify": {"en": "Identify", "fa": "شناسایی"},
+  "detect": {"en": "Detect", "fa": "تشخیص"},
+  "autosaveHint": {"en": "Changes are saved automatically", "fa": "تغییرات به‌طور خودکار ذخیره می‌شوند"}
 }

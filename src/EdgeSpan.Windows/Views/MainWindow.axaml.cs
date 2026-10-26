@@ -7,6 +7,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EdgeSpan.Product;
 using EdgeSpan.Session;
 using EdgeSpan.Windows.ViewModels;
@@ -32,7 +33,21 @@ public sealed partial class MainWindow : Window
             if (e.PropertyName == nameof(MainViewModel.Page))
                 FadePage();
         };
-        Map.PlacementChanged += (id, edge, anchor, corner, offset) => model.PlaceDevice(id, edge, anchor, corner, offset);
+        Map.PlacementChanged += (id, monitor, edge, anchor, corner, offset) => model.PlaceDevice(id, monitor, edge, anchor, corner, offset);
+        Map.TileSelected += model.SelectDeviceById;
+        model.IdentifyRequested += Identify;
+        // Wheel/touchpad scrolling anywhere on a page (cards, expanders, the device list, number boxes, the
+        // Arrange map) always scrolls the page: inner controls with their own ScrollViewer/spinner used to
+        // swallow the wheel, so the page looked stuck. Tunnel handler = runs before them.
+        Pages.AddHandler(PointerWheelChangedEvent, (_, e) =>
+        {
+            if (e.Source is Visual v && v.FindAncestorOfType<ComboBox>(true) is { IsDropDownOpen: true })
+                return;
+            var y = Pages.Offset.Y - e.Delta.Y * 64;
+            var max = Math.Max(0, Pages.Extent.Height - Pages.Viewport.Height);
+            Pages.Offset = new Vector(Pages.Offset.X, Math.Clamp(y, 0, max));
+            e.Handled = true;
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         model.CopyRequested += CopyAsync;
         model.RemoteClipboard += text =>
         {
@@ -99,13 +114,16 @@ public sealed partial class MainWindow : Window
         Title = "EdgeSpan";
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
         {
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None };
-            Background = Brushes.Transparent;
+            // Solid Win11 Settings neutrals (#F3F3F3 / #202020). Mica was dropped: it tints the window with the
+            // wallpaper colour, which produced the cream/peach background on warm wallpapers.
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.None };
             var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
             if (hwnd != IntPtr.Zero)
             {
-                var backdrop = 2;
+                var backdrop = 1; // DWMSBT_NONE
                 DwmSetWindowAttribute(hwnd, 38, ref backdrop, 4);
+                var dark = _model.IsDark ? 1 : 0;
+                DwmSetWindowAttribute(hwnd, 20, ref dark, 4);
             }
         }
     }
@@ -162,6 +180,33 @@ public sealed partial class MainWindow : Window
         RootGrid.ColumnDefinitions[0].Width = new GridLength(narrow ? 0 : 292);
         SideNav.IsVisible = !narrow;
         TopNav.IsVisible = narrow;
+        // 24-36 px page margins (16 on very narrow windows), content centred with a 1000 px max width.
+        var side = width < 560 ? 16 : width < 1100 ? 24 : 36;
+        Pages.Padding = new Thickness(side, 0, side, 48);
+        TitleRow.Margin = new Thickness(side, narrow ? 12 : 22, side, 14);
+    }
+
+    private void Identify()
+    {
+        var monitors = _model.Monitors;
+        for (var i = 0; i < monitors.Count; i++)
+        {
+            var m = monitors[i];
+            var w = new Window
+            {
+                SystemDecorations = SystemDecorations.None, Topmost = true, ShowActivated = false, CanResize = false,
+                Width = 140, Height = 140, Background = new SolidColorBrush(Color.Parse("#E6202020")),
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Position = new PixelPoint(m.X + 48, m.Bottom - 48 - (int)(140 * m.Dpi / 96.0)),
+                Content = new TextBlock
+                {
+                    Text = (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), FontSize = 84, Foreground = Brushes.White,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+                }
+            };
+            w.Show();
+            DispatcherTimer.RunOnce(w.Close, TimeSpan.FromSeconds(2.5));
+        }
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
