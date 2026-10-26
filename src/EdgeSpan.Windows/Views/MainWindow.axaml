@@ -613,6 +613,18 @@
     </Grid>
   </Border>
             <Border Classes="setting">
+    <StackPanel Spacing="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+          <TextBlock Classes="title" Text="{Binding Ui[handoffTestLabel]}"/>
+          <TextBlock Classes="hint" Text="{Binding Ui[handoffTestHint]}" TextWrapping="Wrap"/>
+        </StackPanel>
+        <Button Grid.Column="1" Content="{Binding Ui[handoffTestButton]}" Command="{Binding TestHandoffCommand}"/>
+      </Grid>
+      <SelectableTextBlock Text="{Binding HandoffTestResult}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding HandoffTestResult, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+    </StackPanel>
+  </Border>
+            <Border Classes="setting">
     <Grid ColumnDefinitions="Auto,*,Auto">
       <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 8,8 0 1 1 8.99,1 M 9,8 L 9,13 M 9,5 L 9,5.2"/></ContentControl>
       <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">

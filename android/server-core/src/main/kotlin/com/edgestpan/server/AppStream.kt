@@ -153,14 +153,31 @@ class AppStreamServer(private val port: Int = 27185) {
             val base = 1 or 8 or 64 or 128 // PUBLIC | OWN_CONTENT_ONLY | SUPPORTS_TOUCH | ROTATES_WITH_CONTENT
             val trusted = if (Build.VERSION.SDK_INT >= 33) base or 1024 or 2048 or 4096 or 8192 else base // TRUSTED | OWN_DISPLAY_GROUP | ALWAYS_UNLOCKED | TOUCH_FEEDBACK_DISABLED
             val focus = if (Build.VERSION.SDK_INT >= 34) trusted or 16384 else trusted // OWN_FOCUS
+            // app_process has no Looper on this thread; DisplayManager builds a Handler for the callback and throws
+            // "Can't create handler inside thread that has not called Looper.prepare()" (seen on Android 12),
+            // so give it an explicit Handler on a dedicated looper thread.
+            val handler = displayHandler()
             for (flags in listOf(focus, trusted, base)) {
-                val made = runCatching { manager.createVirtualDisplay("EdgeSpan", w, h, dpi.coerceIn(120, 640), surface, flags) }.getOrNull()
+                val result = runCatching { manager.createVirtualDisplay("EdgeSpan", w, h, dpi.coerceIn(120, 640), surface, flags, null, handler) }
+                    .recoverCatching { first ->
+                        println("edgestpan-server appstream display flags=$flags with handler failed: $first")
+                        if (android.os.Looper.myLooper() == null) android.os.Looper.prepare()
+                        manager.createVirtualDisplay("EdgeSpan", w, h, dpi.coerceIn(120, 640), surface, flags)
+                    }
+                result.exceptionOrNull()?.let { println("edgestpan-server appstream display flags=$flags failed: $it") }
+                val made = result.getOrNull()
                 if (made != null) {
                     println("edgestpan-server appstream display ${made.display.displayId} flags=$flags")
                     return made
                 }
             }
             error("virtual display refused")
+        }
+
+        private fun displayHandler(): android.os.Handler {
+            val thread = android.os.HandlerThread("edgestpan-vd")
+            thread.start()
+            return android.os.Handler(thread.looper)
         }
 
         private fun launch(component: String, displayId: Int): String {

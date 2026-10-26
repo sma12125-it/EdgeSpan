@@ -52,7 +52,10 @@ public sealed class AppSettings
     public string HotkeySendWindow { get; set; } = "Ctrl+Alt+T";
     /// <summary>Leave a small "on tablet" card where a handed-off window used to be.</summary>
     public bool HandoffPlaceholder { get; set; }
-    public string Handoff { get; set; } = "off";
+    /// <summary>Window handoff directions: "off", "pc" (PC to tablet), "phone" (phone apps to PC) or "both".</summary>
+    public string Handoff { get; set; } = "both";
+    /// <summary>Set once 0.9.19 has turned both handoff directions on for an existing install.</summary>
+    public bool HandoffDefaulted { get; set; }
     public string HandoffQuality { get; set; } = "sharp";
     public bool EdgeGlowEnabled { get; set; } = true;
     public string EdgeGlowColor { get; set; } = "#3DDC84";
@@ -90,7 +93,7 @@ public static class SettingsStore
     {
         if (!File.Exists(path))
         {
-            var fresh = new AppSettings { FirstRunUtc = DateTimeOffset.UtcNow };
+            var fresh = new AppSettings { FirstRunUtc = DateTimeOffset.UtcNow, HandoffDefaulted = true };
             return fresh;
         }
         var json = File.ReadAllText(path);
@@ -107,7 +110,14 @@ public static class SettingsStore
         if (settings.HotkeySwitch == "Ctrl+Alt+S")
             settings.HotkeySwitch = "Ctrl+Alt+Space";
         if (settings.Handoff is not ("off" or "pc" or "phone" or "both"))
-            settings.Handoff = "off";
+            settings.Handoff = "both";
+        // Before 0.9.19 handoff shipped "off" and the phone direction had no switch, so both paths refused
+        // silently. Turn both on once; a later choice in Settings is kept.
+        if (!settings.HandoffDefaulted)
+        {
+            settings.Handoff = "both";
+            settings.HandoffDefaulted = true;
+        }
         if (settings.ArrangeScale is not ("resolution" or "uniform"))
             settings.ArrangeScale = "resolution";
         if (settings.HandoffQuality is not ("sharp" or "smooth" or "saver"))

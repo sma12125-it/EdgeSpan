@@ -662,8 +662,18 @@ public sealed class HandoffHost : IDisposable
             if (pid == (uint)Environment.ProcessId)
                 hwnd = 0;
         }
+        SendWindow(hwnd, method);
+    }
+
+    /// <summary>Sends a specific top-level window (tray list, hotkey) to the tablet, with a stage log.</summary>
+    public void SendWindow(nint hwnd, string? method)
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
         var deviceId = _host.DeviceOnEdge(ScreenEdge.Right);
-        DiagLog.Write($"handoff send-window hwnd=0x{hwnd:X} device={deviceId ?? "none"} method={method}");
+        DiagLog.Write($"handoff send-window hwnd=0x{hwnd:X} device={deviceId ?? "none"} method={method} blocker={(deviceId == null ? "-" : _host.HandoffBlocker(deviceId) ?? "none")}");
+        foreach (var line in _host.HandoffLinkReport())
+            DiagLog.Write("handoff link " + line);
         if (hwnd == 0 || deviceId == null)
         {
             NoteFailure(deviceId == null ? "handoffNeedTablet" : "handoffNoHwnd");
@@ -678,6 +688,44 @@ public sealed class HandoffHost : IDisposable
         BeginDragHandoff(deviceId, edge, method);
         _keepDrag = false;
     }
+
+    /// <summary>Visible, titled, non-tool top-level windows of other processes, for the tray "Send window" list.</summary>
+    public static List<(nint Hwnd, string Title)> ListWindows()
+    {
+        var list = new List<(nint, string)>();
+        if (!OperatingSystem.IsWindows())
+            return list;
+        var self = (uint)Environment.ProcessId;
+        EnumWindows((h, _) =>
+        {
+            if (!IsWindowVisible(h) || GetWindow(h, 4) != 0)
+                return true;
+            if ((GetWindowLongW(h, -20) & 0x80) != 0)
+                return true;
+            GetWindowThreadProcessId(h, out var pid);
+            if (pid == self)
+                return true;
+            var sb = new System.Text.StringBuilder(256);
+            if (GetWindowTextW(h, sb, sb.Capacity) <= 0)
+                return true;
+            var t = sb.ToString();
+            if (t is "Program Manager" or "Windows Input Experience" || DwmCloaked(h))
+                return true;
+            list.Add((h, t.Length > 60 ? t[..57] + "…" : t));
+            return list.Count < 25;
+        }, 0);
+        return list;
+    }
+
+    private static bool DwmCloaked(nint h) => DwmGetWindowAttribute(h, 14, out var c, 4) == 0 && c != 0;
+
+    private delegate bool EnumProc(nint hwnd, nint lParam);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc proc, nint lParam);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsWindowVisible(nint hwnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern nint GetWindow(nint hwnd, uint cmd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetWindowLongW(nint hwnd, int index);
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] private static extern int GetWindowTextW(nint hwnd, System.Text.StringBuilder text, int max);
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(nint hwnd, int attr, out int value, int size);
 
     public void CancelDrag()
     {
@@ -766,24 +814,42 @@ public sealed class HandoffHost : IDisposable
         var height = Math.Max(1, home.Bottom - home.Top);
         var x = home.Left;
         var y = home.Top;
+        // Park past the whole virtual desktop (all monitors), not just the configured screen, so on multi-monitor
+        // setups the window does not land on a second display; keep a 4 px sliver on-screen so DWM keeps the
+        // window "visible" and Chromium/Electron apps keep painting (fully off-screen windows can go black in WGC).
+        var vx = GetSystemMetrics(76);
+        var vy = GetSystemMetrics(77);
+        var vw = GetSystemMetrics(78);
+        var vh = GetSystemMetrics(79);
+        if (vw <= 0 || vh <= 0)
+        {
+            vx = settings.ScreenOriginX;
+            vy = settings.ScreenOriginY;
+            vw = Math.Max(settings.ScreenWidth, 1);
+            vh = Math.Max(settings.ScreenHeight, 1);
+        }
+        const int sliver = 4;
         switch (edge)
         {
             case ScreenEdge.Right:
-                x = settings.ScreenOriginX + Math.Max(settings.ScreenWidth, 1) + 80;
+                x = vx + vw - sliver;
                 break;
             case ScreenEdge.Left:
-                x = settings.ScreenOriginX - width - 80;
+                x = vx - width + sliver;
                 break;
             case ScreenEdge.Bottom:
-                y = settings.ScreenOriginY + Math.Max(settings.ScreenHeight, 1) + 80;
+                y = vy + vh - sliver;
                 break;
             default:
-                y = settings.ScreenOriginY - height - 80;
+                y = vy - height + sliver;
                 break;
         }
         var parked = SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010);
         DiagLog.Write($"handoff park {parked} at {x},{y}");
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     private static string CancelWindow(nint hwnd)
     {

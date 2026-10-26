@@ -392,5 +392,17 @@
   "handoffPhoneLabel": {"en": "Open phone apps on this PC", "fa": "باز کردن برنامه‌های گوشی روی این رایانه"},
   "appStreamBlocked": {"en": "This app blocks screen capture, so it can't be shown here.", "fa": "این برنامه از ضبط صفحه جلوگیری می‌کند و نمی‌توان آن را اینجا نشان داد."},
   "appStreamWaiting": {"en": "Waiting for the phone…", "fa": "در انتظار گوشی…"},
-  "appStreamBack": {"en": "Back to phone", "fa": "بازگشت به گوشی"}
+  "appStreamBack": {"en": "Back to phone", "fa": "بازگشت به گوشی"},
+  "handoffNoOverlay": {"en": "EdgeSpan can't draw over other apps on the tablet. Turn on 'Display over other apps' or the EdgeSpan accessibility service.", "fa": "EdgeSpan نمی‌تواند روی برنامه‌های دیگر تبلت نمایش دهد. «نمایش روی برنامه‌های دیگر» یا سرویس دسترس‌پذیری EdgeSpan را روشن کنید."},
+  "handoffNoVideo": {"en": "The tablet could not reach the PC's video port (27184). Check the USB link or firewall.", "fa": "تبلت به درگاه ویدیوی رایانه (27184) نرسید. اتصال USB یا دیوار آتش را بررسی کنید."},
+  "handoffNoKey": {"en": "The secure link isn't ready yet. Try again in a moment.", "fa": "پیوند امن هنوز آماده نیست. چند لحظه دیگر دوباره امتحان کنید."},
+  "handoffStageConnecting": {"en": "Receiving window from PC…", "fa": "در حال دریافت پنجره از رایانه…"},
+  "trayWindowList": {"en": "Send window to tablet", "fa": "فرستادن پنجره به تبلت"},
+  "trayWindowNone": {"en": "(no windows)", "fa": "(پنجره‌ای نیست)"},
+  "handoffTestLabel": {"en": "Test handoff", "fa": "آزمایش انتقال پنجره"},
+  "handoffTestHint": {"en": "Checks each step of moving a window to the tablet and shows which one fails.", "fa": "هر مرحلهٔ انتقال پنجره به تبلت را بررسی می‌کند و مرحلهٔ ناموفق را نشان می‌دهد."},
+  "handoffTestButton": {"en": "Run test", "fa": "اجرای آزمایش"},
+  "handoffTestRunning": {"en": "Testing…", "fa": "در حال آزمایش…"},
+  "sendPcStageConnecting": {"en": "Connecting to PC…", "fa": "در حال اتصال به رایانه…"},
+  "sendPcStageShown": {"en": "Now showing on PC", "fa": "اکنون روی رایانه نمایش داده می‌شود"}
 }

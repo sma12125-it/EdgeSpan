@@ -397,10 +397,12 @@ public sealed class SessionRuntime : IDisposable
     }
 
     private static bool IsHandoffFailure(string key) => key is
-        "handoffNeedTablet" or "handoffNoLink" or "handoffNoEncoder" or "handoffBlack" or "handoffPcOff" or "handoffNoHwnd";
+        "handoffNeedTablet" or "handoffNoLink" or "handoffNoEncoder" or "handoffBlack" or "handoffPcOff" or "handoffNoHwnd" or "handoffNoOverlay" or "handoffNoVideo" or "handoffNoKey" or "handoffJpeg";
 
     /// <summary>Tray "Send window to tablet": uses the last window that was in front before the tray took focus.</summary>
     public void SendWindowToTablet() => _handoff.SendForeground(ActiveMethod, useLast: true);
+
+    public void SendWindowHandle(nint hwnd) => _handoff.SendWindow(hwnd, ActiveMethod);
 
     private void Pump()
     {

@@ -72,6 +72,7 @@ public sealed class AppStreamHost : IDisposable
     {
         AppStreamWindow? window = null;
         H264Decoder? decoder = null;
+        Com.EnsureMta();
         try
         {
             client.NoDelay = true;

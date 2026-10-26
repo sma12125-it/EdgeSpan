@@ -65,6 +65,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _runtime = runtime;
         _boundPort = runtime.Host.Settings.ListenPort;
         RestartCommand = new RelayCommand(RestartApp);
+        TestHandoffCommand = new RelayCommand(TestHandoff);
         PickGlowColorCommand = new RelayCommand<string>(hex => { if (!string.IsNullOrEmpty(hex)) EdgeGlowColor = hex; });
         _autosave = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         _autosave.Tick += (_, _) => AutosaveTick();
@@ -131,6 +132,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public HostController Host => _runtime.Host;
 
     public void SendWindowToTablet() => _runtime.SendWindowToTablet();
+
+    public void SendWindowHandle(nint hwnd) => _runtime.SendWindowHandle(hwnd);
     public ObservableCollection<DeviceRow> Devices { get; } = new();
     public ObservableCollection<PeerRow> Peers { get; } = new();
     public ObservableCollection<string> Logs { get; } = new();
@@ -489,6 +492,28 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool HandoffPc { get; set; }
     public bool HandoffPlaceholder { get; set; }
     public bool HandoffPhone { get; set; }
+
+    public RelayCommand TestHandoffCommand { get; }
+
+    public string HandoffTestResult { get; private set; } = "";
+
+    private void TestHandoff()
+    {
+        HandoffTestResult = Ui["handoffTestRunning"];
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HandoffTestResult)));
+        var host = Host;
+        Task.Run(() =>
+        {
+            string text;
+            try { text = Services.HandoffSelfTest.Run(host); }
+            catch (Exception ex) { text = "Self-test crashed: " + ex.Message; }
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                HandoffTestResult = text;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HandoffTestResult)));
+            });
+        });
+    }
     public string HandoffStatus { get; private set; } = "";
     public string RelayUrl { get; set; } = "";
     public string StunHost { get; set; } = "";

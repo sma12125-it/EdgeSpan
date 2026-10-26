@@ -36,6 +36,7 @@ internal static class WindowEncoder
     public static void Run(nint hwnd, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report, Func<int>? bitrateCap = null)
     {
         var sent = 0;
+        Com.EnsureMta();
         try
         {
             Loop(hwnd, quality, stop, takeIdr, (bytes, us, flags) =>
@@ -47,8 +48,8 @@ internal static class WindowEncoder
         catch (Exception ex)
         {
             Stage("run", ex);
-            if (sent == 0)
-                report("handoffNoEncoder");
+            if (sent == 0 && !stop())
+                GdiCapture.Loop(hwnd, stop, publish, report, "run " + ex.GetType().Name);
         }
     }
 
@@ -63,7 +64,7 @@ internal static class WindowEncoder
         catch (Exception ex)
         {
             Stage("D3D11CreateDevice", ex);
-            report("handoffNoEncoder");
+            GdiCapture.Loop(hwnd, stop, publish, report, "D3D11CreateDevice");
             return;
         }
         using (device)
@@ -78,7 +79,7 @@ internal static class WindowEncoder
             catch (Exception ex)
             {
                 Stage("GraphicsCaptureItem", ex);
-                report("handoffNoEncoder");
+                GdiCapture.Loop(hwnd, stop, publish, report, "GraphicsCaptureItem");
                 return;
             }
             IDirect3DDevice winrt;
@@ -90,7 +91,7 @@ internal static class WindowEncoder
             catch (Exception ex)
             {
                 Stage("WinrtDevice", ex);
-                report("handoffNoEncoder");
+                GdiCapture.Loop(hwnd, stop, publish, report, "WinrtDevice");
                 return;
             }
             var size = item.Size;
@@ -105,7 +106,7 @@ internal static class WindowEncoder
             catch (Exception ex)
             {
                 Stage("framePool", ex);
-                report("handoffNoEncoder");
+                GdiCapture.Loop(hwnd, stop, publish, report, "framePool");
                 if (winrt is IDisposable broken)
                     broken.Dispose();
                 return;
@@ -129,9 +130,10 @@ internal static class WindowEncoder
             var arrived = new ManualResetEventSlim(false);
             pool.FrameArrived += (_, _) => arrived.Set();
             session.StartCapture();
+            var fallback = "";
             try
             {
-                Pump(device, context, pool, quality, stop, takeIdr, publish, report, arrived, mf, bitrateCap);
+                fallback = Pump(device, context, pool, quality, stop, takeIdr, publish, report, arrived, mf, bitrateCap);
             }
             finally
             {
@@ -141,10 +143,12 @@ internal static class WindowEncoder
                     disposable.Dispose();
                 arrived.Dispose();
             }
+            if (fallback.Length > 0 && !stop())
+                GdiCapture.Loop(hwnd, stop, publish, report, fallback);
         }
     }
 
-    private static void Pump(ID3D11Device device, ID3D11DeviceContext context, Direct3D11CaptureFramePool pool, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report, ManualResetEventSlim arrived, bool allowH264, Func<int>? bitrateCap)
+    private static string Pump(ID3D11Device device, ID3D11DeviceContext context, Direct3D11CaptureFramePool pool, string? quality, Func<bool> stop, Func<bool> takeIdr, Action<byte[], ulong, byte> publish, Action<string> report, ManualResetEventSlim arrived, bool allowH264, Func<int>? bitrateCap)
     {
         Encoder? encoder = null;
         var black = 0;
@@ -155,10 +159,18 @@ internal static class WindowEncoder
         var jpegSent = false;
         var sawFrame = false;
         var loggedTexture = false;
+        var waitStarted = Environment.TickCount64;
         while (!stop())
         {
             if (!arrived.Wait(12))
+            {
+                if (!sawFrame && Environment.TickCount64 - waitStarted > 3000)
+                {
+                    DiagLog.Write("handoff stage wgc no frame in 3 s");
+                    return "noframe";
+                }
                 continue;
+            }
             arrived.Reset();
             using var frame = pool.TryGetNextFrame();
             if (frame == null)
@@ -224,8 +236,10 @@ internal static class WindowEncoder
                 {
                     if (++black >= 45)
                     {
-                        report("handoffBlack");
-                        return;
+                        // Black from WGC (protected or not-painting window): PrintWindow often still works.
+                        DiagLog.Write("handoff stage wgc black x45");
+                        encoder?.Dispose();
+                        return "black";
                     }
                 }
                 else
@@ -254,7 +268,8 @@ internal static class WindowEncoder
                     {
                         Stage("jpeg", ex);
                         report("handoffNoEncoder");
-                        return;
+                        encoder?.Dispose();
+                        return "";
                     }
                     jpegHash = hash;
                     jpegSent = true;
@@ -286,6 +301,7 @@ internal static class WindowEncoder
             }
         }
         encoder?.Dispose();
+        return "";
     }
 
     private static (int Width, int Height) JpegSize(int width, int height)

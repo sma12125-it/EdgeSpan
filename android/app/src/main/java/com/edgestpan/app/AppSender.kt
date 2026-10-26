@@ -114,7 +114,10 @@ object AppSender {
             toast(context, "sendPcNoLink", "Connect to the PC first (USB or Wi-Fi).")
             return
         }
+        Log.i(TAG, "appstream stage link ok address=$address method=${AppLink.method} component=$component")
+        toast(context, "sendPcStageConnecting", "Connecting to PC…")
         val source = sourceFactory()
+        Log.i(TAG, "appstream stage source ${source?.javaClass?.simpleName ?: "none"} ${source?.width}x${source?.height}")
         if (source == null) {
             toast(context, "sendPcNoSource", "Could not capture the app.")
             return
@@ -129,12 +132,17 @@ object AppSender {
             out.write(AppStreamWire.writeHello(engine.id, source.width, source.height, seq, title, component))
             out.flush()
             val n = Integer.reverseBytes(input.readInt())
-            if (n !in 13..64) return
+            if (n !in 13..64) {
+                Log.w(TAG, "appstream stage bad reply length $n")
+                toast(context, "sendPcRefused", "The PC refused. Turn on \"Android apps to this PC\" in EdgeSpan on Windows.")
+                return
+            }
             val reply = AppStreamWire.readReply(ByteArray(n).also { input.readFully(it) })
             if (reply == null || !reply.first) {
                 toast(context, "sendPcRefused", "The PC refused. Turn on \"Android apps to this PC\" in EdgeSpan on Windows.")
                 return
             }
+            toast(context, "sendPcStageShown", "Now showing on PC")
             Log.i(TAG, "appstream connected $address via ${AppLink.method} ${source.width}x${source.height} $component")
             var pcSeq = reply.second
             Thread({

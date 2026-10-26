@@ -17,6 +17,7 @@ public sealed class App : Application
     private NativeMenuItem? _switchItem;
     private NativeMenuItem? _quitItem;
     private NativeMenuItem? _sendItem;
+    private NativeMenuItem? _listItem;
     private MainWindow? _window;
     private MainViewModel? _model;
 
@@ -61,6 +62,9 @@ public sealed class App : Application
         menu.Add(_openItem);
         menu.Add(_switchItem);
         menu.Add(_sendItem);
+        _listItem = new NativeMenuItem { Menu = new NativeMenu() };
+        menu.Add(_listItem);
+        menu.Opening += (_, _) => FillWindowList();
         menu.Add(_quitItem);
         _tray = new TrayIcon
         {
@@ -84,8 +88,27 @@ public sealed class App : Application
         if (_sendItem != null)
         {
             _sendItem.Header = EdgeSpan.Product.Catalog.Format(_model.Host.Settings.Language, "traySendWindow", _model.Host.Settings.HotkeySendWindow);
-            _sendItem.IsVisible = EdgeSpan.Layout.HandoffPolicy.AllowsPcToPhone(_model.Host.Settings.Handoff);
+            _sendItem.IsVisible = true; // always available; failures explain themselves (e.g. handoff turned off)
         }
+        FillWindowList();
+    }
+
+    private void FillWindowList()
+    {
+        if (_listItem?.Menu == null || _model == null)
+            return;
+        var lang = _model.Host.Settings.Language;
+        _listItem.Header = EdgeSpan.Product.Catalog.Get(lang, "trayWindowList");
+        _listItem.Menu.Items.Clear();
+        foreach (var (hwnd, title) in Services.HandoffHost.ListWindows())
+        {
+            var item = new NativeMenuItem(title);
+            var target = hwnd;
+            item.Click += (_, _) => _model?.SendWindowHandle(target);
+            _listItem.Menu.Items.Add(item);
+        }
+        if (_listItem.Menu.Items.Count == 0)
+            _listItem.Menu.Items.Add(new NativeMenuItem(EdgeSpan.Product.Catalog.Get(lang, "trayWindowNone")) { IsEnabled = false });
     }
 
     private void ShowWindow()

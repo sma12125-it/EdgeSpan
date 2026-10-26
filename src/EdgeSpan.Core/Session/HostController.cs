@@ -879,6 +879,25 @@ public sealed class HostController : IDisposable
             return _links.TryGetValue(deviceId, out var link) ? link.Session?.MediaSendKey() : null;
     }
 
+    /// <summary>One line per link for the handoff self-test and the diagnostics log.</summary>
+    public IReadOnlyList<string> HandoffLinkReport()
+    {
+        lock (_gate)
+        {
+            return _links.Values.Select(l =>
+                $"device={l.Config.Id} name={l.Config.Name} established={l.Session?.Established == true} caps=0x{l.PeerCaps:X2} " +
+                $"tabletHandoff={(l.PeerCaps & ProductInfo.HandoffCapability) != 0} relay={l.RelayPeer != null} remote={l.Remote} edge={l.Config.PcEdge} " +
+                $"screen={l.Config.ScreenWidth}x{l.Config.ScreenHeight} keys={l.Session?.MediaSendKey() != null}").ToList();
+        }
+    }
+
+    /// <summary>Why a handoff to <paramref name="deviceId"/> would be refused right now, or null when it can start.</summary>
+    public string? HandoffBlocker(string deviceId)
+    {
+        lock (_gate)
+            return DragReject(deviceId);
+    }
+
     public string? DeviceOnEdge(ScreenEdge edge)
     {
         lock (_gate)

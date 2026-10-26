@@ -114,18 +114,29 @@ class HandoffViewer(
         else
             videoX = (engine.x - contentW / 2).coerceIn(0, (DisplaySize.width - contentW).coerceAtLeast(0))
         val id = event.id
+        Log.i("EdgeSpan", "handoff stage offer id=$id ${event.physW}x${event.physH} edge=${event.edge}")
+        if (owner() == null) {
+            // Without overlay permission or the accessibility service nothing can be drawn; say so instead of
+            // accepting a stream we can never show.
+            Log.w("EdgeSpan", "handoff stage refused: no overlay permission and no accessibility service")
+            fail(id, "handoffNoOverlay")
+            return
+        }
+        stage("handoffStageConnecting")
         val title = event.title.ifBlank { strings["handoffWaiting"] ?: "Waiting for the window…" }
         Thread({
             // USB goes through the adb reverse tunnel; LAN/direct links dial the PC's own address.
             val host = if (method == "usb") "127.0.0.1" else videoHost()
             Log.i("EdgeSpan", "handoff video via $method host=${host ?: "none"}")
             if (host == null) {
+                Log.w("EdgeSpan", "handoff stage no video host")
                 fail(id, "handoffNoLink")
                 return@Thread
             }
             val key = engine.mediaReceiveKey()
             if (key == null) {
-                fail(id, "handoffNoLink")
+                Log.w("EdgeSpan", "handoff stage no media key")
+                fail(id, "handoffNoKey")
                 return@Thread
             }
             val sock = Socket()
@@ -135,9 +146,10 @@ class HandoffViewer(
                 sock.sendBufferSize = 64 * 1024
                 sock.receiveBufferSize = 256 * 1024
                 sock.soTimeout = 400
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w("EdgeSpan", "handoff stage connect $host:27184 failed: $e")
                 runCatching { sock.close() }
-                fail(id, "handoffNoLink")
+                fail(id, "handoffNoVideo")
                 return@Thread
             }
             synchronized(gate) {
@@ -248,7 +260,7 @@ class HandoffViewer(
 
     private fun attach(id: Long, title: String) {
         val ctx = owner() ?: run {
-            fail(id, "handoffNoLink")
+            fail(id, "handoffNoOverlay")
             return
         }
         host = ctx
@@ -699,8 +711,17 @@ class HandoffViewer(
         }
     }
 
+    private fun stage(key: String) {
+        val text = strings[key] ?: return
+        main.post { showNote(text) }
+    }
+
     private fun showNote(text: String) {
-        val ctx = owner() ?: return
+        val ctx = owner() ?: run {
+            // No overlay: a plain toast still reaches the user.
+            runCatching { android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show() }
+            return
+        }
         val view = TextView(ctx).apply {
             this.text = text
             setTextColor(Color.WHITE)
