@@ -528,11 +528,19 @@ class PhoneSession(
         fun pump(stop: AtomicBoolean, width: Int, height: Int, method: String) {
             val prefs = context.getSharedPreferences("edgestpan", Context.MODE_PRIVATE)
             val backend = prefs.getString("backend", "")
-            val adb = AdbInjector()
-            val uhid = (method == "usb" || backend == "adb") && adb.connect(width, height)
-            var injector: Injector? = if (uhid) adb else null
-            if (method == "usb" || backend == "adb") Log.i(TAG, if (uhid) "uhid-connected" else "uhid-unavailable")
-            if (uhid) injector = choosePointer(adb, stop)
+            val adbAllowed = method == "usb" || backend == "adb"
+            val noPath = java.util.concurrent.atomic.AtomicReference<String?>(null)
+            val router = InjectorRouter(
+                context,
+                adbAllowed,
+                { DisplaySize.ensure(context); Pair(if (DisplaySize.width > 0) DisplaySize.width else width, if (DisplaySize.height > 0) DisplaySize.height else height) },
+                { edgeSpanMouse() },
+                { reason -> noPath.compareAndSet(null, reason) }
+            )
+            val uhid = adbAllowed && router.primeAdb()
+            if (uhid) waitForMouse(stop)
+            CrashLog.note(context, "session method=$method backend=$backend uhid=$uhid mouse=${edgeSpanMouse()} access=${EdgeAccessibility.instance != null} accessEnabled=${EdgeAccessibility.isEnabled(context)}")
+            val injector: Injector = router
             var sentAt = 0L
             var lastLatencyNote = 0L
             var buttons = 0
@@ -565,7 +573,7 @@ class PhoneSession(
                 if (!local) {
                     local = true
                     quietUntil = SystemClock.elapsedRealtime() + 400
-                    injector?.hidePointer()
+                    injector.hidePointer()
                     engine.releaseControl()
                     flush()
                 }
@@ -595,10 +603,10 @@ class PhoneSession(
                     }
                     is ClientEvent.EdgeReturned -> {
                         Log.i(TAG, "edge-return edge=${event.edge}")
-                        injector?.releaseModifiers()
+                        injector.releaseModifiers()
                         glowState = GlowPolicy.leave(event.edge, glowState.finger)
                         local = true
-                        injector?.hidePointer()
+                        injector.hidePointer()
                         if (glowState.show && glowOn()) {
                             glow.show(glowState.edge)
                             if (Motion.breakthrough(context)) cue()
@@ -634,16 +642,29 @@ class PhoneSession(
                 if (local && now < quietUntil && event !is ClientEvent.EdgeEntered) return@onEvent
                 if (!local || event is ClientEvent.EdgeEntered || event is ClientEvent.Key) {
                     try {
-                        injector?.onEvent(event)
+                        injector.onEvent(event)
                     } catch (thrown: Throwable) {
-                        if (event is ClientEvent.EdgeEntered) CrashLog.caught(context, "edge-enter inject", thrown)
-                        else Log.e(TAG, "inject", thrown)
+                        if (event is ClientEvent.EdgeEntered) {
+                            CrashLog.caught(context, "edge-enter inject", thrown)
+                            noPath.compareAndSet(null, "error")
+                        } else Log.e(TAG, "inject", thrown)
                     }
                 }
             }
             val clips = context.getSystemService(android.content.ClipboardManager::class.java)
             clips?.addPrimaryClipChangedListener { ClipHub.onClipboardChanged() }
             while (!stop.get()) {
+                noPath.getAndSet(null)?.let { reason ->
+                    // No working injection path: never pretend we have control.
+                    InjectAlert.show(context, reason)
+                    glow.hide()
+                    injector.hidePointer()
+                    if (engine.hasControl) {
+                        local = true
+                        engine.releaseControl()
+                        flush()
+                    }
+                }
                 engine.setHandoffPc(wantsHandoff(prefs))
                 viewer.drain()
                 val now = SystemClock.elapsedRealtime()
@@ -682,13 +703,13 @@ class PhoneSession(
                 val dh = DisplaySize.height
                 if (dw > 0 && dh > 0 && (dw != engine.screenW || dh != engine.screenH)) {
                     engine.updateScreen(dw, dh)
-                    if (uhid) adb.resize(dw, dh)
+                    router.resize(dw, dh)
                 }
             }
-            injector?.releaseModifiers()
+            injector.releaseModifiers()
             viewer.close()
             glow.close()
-            injector?.close()
+            injector.close()
             counter.close()
         }
 
@@ -700,31 +721,16 @@ class PhoneSession(
 
         fun close() = runCatching { closeAction() }
 
-        private fun choosePointer(keys: AdbInjector, stop: AtomicBoolean): Injector {
+        private fun waitForMouse(stop: AtomicBoolean) {
             val deadline = SystemClock.elapsedRealtime() + 1200
-            var mouse = false
             while (!stop.get() && SystemClock.elapsedRealtime() < deadline) {
-                mouse = edgeSpanMouse()
-                if (mouse) break
+                if (edgeSpanMouse()) break
                 flush()
                 poll(80)
                 engine.tick(SystemClock.elapsedRealtime())
             }
             val speed = runCatching { Settings.System.getInt(context.contentResolver, "pointer_speed", 0) }.getOrDefault(0)
-            Log.i(TAG, "pointer-speed=$speed")
-            if (mouse) {
-                Log.i(TAG, "uhid-mouse")
-                return keys
-            }
-            Log.i(TAG, "uhid-mouse-absent")
-            val access = EdgeAccessibility.instance
-            return if (access != null) {
-                Log.i(TAG, "overlay-cursor")
-                SplitInjector(keys, AccessInjector(access))
-            } else {
-                Log.i(TAG, "overlay-need-access")
-                keys
-            }
+            Log.i(TAG, "pointer-speed=$speed mouse=${edgeSpanMouse()}")
         }
 
         private fun handoffFailed(prefs: android.content.SharedPreferences, lang: String, key: String) {

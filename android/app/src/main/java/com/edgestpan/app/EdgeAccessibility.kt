@@ -6,6 +6,7 @@ import android.view.accessibility.AccessibilityEvent
 class EdgeAccessibility : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
+        CrashLog.note(this, "accessibility connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -21,6 +22,7 @@ class EdgeAccessibility : AccessibilityService() {
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
         if (instance === this) instance = null
+        CrashLog.note(this, "accessibility unbound")
         return super.onUnbind(intent)
     }
 
@@ -31,5 +33,12 @@ class EdgeAccessibility : AccessibilityService() {
 
     companion object {
         @Volatile var instance: EdgeAccessibility? = null
+
+        fun isEnabled(context: android.content.Context): Boolean = try {
+            val list = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+            list.split(':').any { it.equals("${context.packageName}/${EdgeAccessibility::class.java.name}", true) || it.equals("${context.packageName}/.EdgeAccessibility", true) }
+        } catch (_: Exception) {
+            false
+        }
     }
 }

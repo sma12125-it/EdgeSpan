@@ -24,9 +24,12 @@ interface Injector {
     fun releaseModifiers() {}
 }
 
-class AdbInjector : Injector {
+class AdbInjector(private val context: android.content.Context? = null) : Injector {
     private var socket: Socket? = null
-    private var out: OutputStream? = null
+    @Volatile private var out: OutputStream? = null
+
+    /** True while the socket to the UHID injection server is usable. */
+    val alive: Boolean get() = out != null && socket?.isClosed == false
 
     fun connect(width: Int, height: Int, port: Int = 27183): Boolean = try {
         val s = Socket()
@@ -53,7 +56,8 @@ class AdbInjector : Injector {
             }
         }, "edgestpan-finger").apply { isDaemon = true }.start()
         true
-    } catch (_: Exception) {
+    } catch (thrown: Exception) {
+        context?.let { CrashLog.note(it, "adb connect 127.0.0.1:$port failed: ${thrown.javaClass.simpleName} ${thrown.message}") }
         false
     }
 
@@ -101,7 +105,9 @@ class AdbInjector : Injector {
             out?.flush()
         } catch (thrown: java.io.IOException) {
             android.util.Log.e("EdgeSpan", "adb write", thrown)
+            context?.let { CrashLog.caught(it, "adb write (injection server gone)", thrown) }
             out = null
+            runCatching { socket?.close() }
         }
     }
 
@@ -131,7 +137,12 @@ class SplitInjector(private val keys: Injector, private val pointer: Injector) :
     }
 }
 
-class AccessInjector(private val service: AccessibilityService) : Injector {
+class AccessInjector(
+    val service: AccessibilityService,
+    private val onBroken: (String, Throwable?) -> Unit = { _, _ -> }
+) : Injector {
+    @Volatile var broken = false
+        private set
     private val main = Handler(Looper.getMainLooper())
     private val wm = service.getSystemService(WindowManager::class.java)
     private val cursor = View(service).apply { setBackgroundColor(0xFF3DDC84.toInt()) }
@@ -145,13 +156,22 @@ class AccessInjector(private val service: AccessibilityService) : Injector {
             } catch (thrown: Throwable) {
                 // A stale accessibility token (service restarted) throws BadTokenException here.
                 android.util.Log.e("EdgeSpan", "access inject ${event.javaClass.simpleName}", thrown)
-                if (event is ClientEvent.EdgeEntered) CrashLog.caught(service, "access cursor", thrown)
                 added = cursor.parent != null
+                if (event is ClientEvent.EdgeEntered || event is ClientEvent.Mouse) {
+                    if (!broken) {
+                        broken = true
+                        CrashLog.caught(service, "access cursor overlay", thrown)
+                        onBroken("overlay", thrown)
+                    }
+                }
             }
         }
     }
 
     private fun apply(event: ClientEvent) {
+        if (EdgeAccessibility.instance !== service && (event is ClientEvent.EdgeEntered || event is ClientEvent.Mouse)) {
+            throw IllegalStateException("accessibility service instance is stale or unbound")
+        }
         when (event) {
             is ClientEvent.EdgeEntered -> show(event.x, event.y)
             is ClientEvent.Mouse -> show(event.x, event.y)
@@ -188,7 +208,7 @@ class AccessInjector(private val service: AccessibilityService) : Injector {
         EdgeGlowOverlay.coverBars(params)
         params.x = placed.first
         params.y = placed.second
-        val manager = wm ?: return
+        val manager = wm ?: throw IllegalStateException("no WindowManager for accessibility overlay")
         if (!added || cursor.parent == null) {
             manager.addView(cursor, params)
             added = true
@@ -208,7 +228,8 @@ class AccessInjector(private val service: AccessibilityService) : Injector {
         val path = Path().apply { moveTo(x1.toFloat(), y1.toFloat()); lineTo(x2.toFloat(), y2.toFloat()) }
         val stroke = GestureDescription.StrokeDescription(path, 0, duration)
         runCatching { service.dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null) }
-            .onFailure { android.util.Log.e("EdgeSpan", "gesture", it) }
+            .onSuccess { ok -> if (!ok) CrashLog.note(service, "dispatchGesture rejected (service not ready?)") }
+            .onFailure { CrashLog.caught(service, "gesture", it) }
     }
 
     private fun swipe(x: Int, y: Int, dx: Int, dy: Int) {
@@ -220,6 +241,172 @@ class AccessInjector(private val service: AccessibilityService) : Injector {
 
     override fun close() {
         main.post { hide() }
+    }
+}
+
+/**
+ * Picks a working injection path every time control enters Android, instead of once per session:
+ *   1. UHID injection server (USB/adb) when its socket is alive and the "EdgeSpan Mouse" device exists,
+ *   2. the accessibility overlay cursor + gestures, re-acquiring the current service instance,
+ *   3. UHID without a verified mouse device (last resort).
+ * Keys go to the UHID keyboard when alive, else to the IME bridge.
+ * If nothing works, [onNoPath] is called (on any thread) so the session can return control and tell the user.
+ */
+class InjectorRouter(
+    private val context: android.content.Context,
+    private val adbAllowed: Boolean,
+    private val size: () -> Pair<Int, Int>,
+    private val mousePresent: () -> Boolean,
+    private val onNoPath: (String) -> Unit
+) : Injector {
+    private var adb: AdbInjector? = null
+    private var access: AccessInjector? = null
+    private var pointer: Injector? = null
+    private var lastAdbTry = 0L
+    var path: String = "none"
+        private set
+
+    /** Used before the session starts to prime the UHID server connection. */
+    fun primeAdb(): Boolean = ensureAdb(force = true)
+
+    val adbAlive: Boolean get() = adb?.alive == true
+
+    fun resize(width: Int, height: Int) { adb?.resize(width, height) }
+
+    private fun ensureAdb(force: Boolean = false): Boolean {
+        if (!adbAllowed) return false
+        if (adb?.alive == true) return true
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (!force && now - lastAdbTry < 1500) return false
+        lastAdbTry = now
+        adb?.close()
+        val (w, h) = size()
+        val fresh = AdbInjector(context)
+        val ok = fresh.connect(w, h)
+        adb = if (ok) fresh else null
+        CrashLog.note(context, if (ok) "uhid-connected" else "uhid-unavailable")
+        return ok
+    }
+
+    private fun currentAccess(): AccessInjector? {
+        var service = EdgeAccessibility.instance
+        if (service == null && EdgeAccessibility.isEnabled(context)) {
+            // Enabled but between onUnbind and onServiceConnected: wait briefly for the rebind.
+            val deadline = android.os.SystemClock.elapsedRealtime() + 700
+            while (service == null && android.os.SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(50)
+                service = EdgeAccessibility.instance
+            }
+        }
+        if (service == null) {
+            access?.close(); access = null
+            return null
+        }
+        val existing = access
+        if (existing != null && existing.service === service && !existing.broken) return existing
+        existing?.close()
+        val made = AccessInjector(service) { why, _ ->
+            CrashLog.note(context, "accessibility cursor failed ($why); falling back")
+            if (pointer === access) {
+                pointer = null
+                path = "none"
+                if (!adbAliveWithMouse()) onNoPath("overlay")
+            }
+        }
+        access = made
+        return made
+    }
+
+    private fun adbAliveWithMouse() = ensureAdb() && mousePresent()
+
+    private fun select(): Injector? {
+        val chosen: Injector?
+        if (adbAliveWithMouse()) {
+            chosen = adb; path = "uhid"
+        } else {
+            val a = currentAccess()
+            if (a != null) {
+                chosen = a; path = "accessibility"
+            } else if (adb?.alive == true) {
+                chosen = adb; path = "uhid-unverified"
+            } else {
+                chosen = null; path = "none"
+            }
+        }
+        CrashLog.note(context, "injector path=$path adbAllowed=$adbAllowed adbAlive=${adb?.alive == true} mouse=${runCatching { mousePresent() }.getOrDefault(false)} access=${EdgeAccessibility.instance != null} accessEnabled=${EdgeAccessibility.isEnabled(context)}")
+        if (pointer !== chosen && pointer is AccessInjector) pointer?.hidePointer()
+        pointer = chosen
+        return chosen
+    }
+
+    override fun onEvent(event: ClientEvent) {
+        when (event) {
+            is ClientEvent.EdgeEntered -> {
+                val p = select()
+                if (p == null) {
+                    onNoPath(if (EdgeAccessibility.isEnabled(context)) "unbound" else "access-off")
+                    return
+                }
+                p.onEvent(event)
+            }
+            is ClientEvent.Key -> {
+                if (ensureAdb()) adb?.onEvent(event) else (access ?: currentAccess())?.onEvent(event)
+            }
+            else -> {
+                var p = pointer
+                if (p is AdbInjector && !p.alive) {
+                    CrashLog.note(context, "uhid socket lost mid-control; reselecting")
+                    p = select()
+                    if (p == null) { onNoPath("lost"); return }
+                }
+                p?.onEvent(event)
+                if (p === adb && adb?.alive == false) {
+                    p = select()
+                    if (p == null) onNoPath("lost") else p.onEvent(event)
+                }
+            }
+        }
+    }
+
+    override fun releaseModifiers() { adb?.releaseModifiers() }
+
+    override fun hidePointer() { access?.hidePointer(); pointer?.hidePointer() }
+
+    override fun close() {
+        adb?.close(); access?.close()
+    }
+}
+
+/** User-facing alert when no injection path works. */
+object InjectAlert {
+    private const val Channel = "edgestpan-alert"
+
+    fun show(context: android.content.Context, reason: String) {
+        val accessOff = reason == "access-off" || reason == "unbound" || reason == "overlay"
+        val title = "EdgeSpan can't control this device"
+        val text = if (accessOff) "Accessibility service is off \u2013 tap to enable" else "Input connection lost \u2013 control returned to Windows"
+        CrashLog.note(context, "no injection path ($reason): $text")
+        try {
+            val manager = context.getSystemService(android.app.NotificationManager::class.java) ?: return
+            manager.createNotificationChannel(android.app.NotificationChannel(Channel, "EdgeSpan alerts", android.app.NotificationManager.IMPORTANCE_HIGH))
+            val intent = if (accessOff) android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            else android.content.Intent(context, MainActivity::class.java)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            val pending = android.app.PendingIntent.getActivity(context, 11, intent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+            val note = android.app.Notification.Builder(context, Channel)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_stat_edgestpan)
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .build()
+            manager.notify(12, note)
+        } catch (thrown: Throwable) {
+            CrashLog.caught(context, "inject alert", thrown)
+        }
+        Handler(Looper.getMainLooper()).post {
+            runCatching { android.widget.Toast.makeText(context.applicationContext, text, android.widget.Toast.LENGTH_LONG).show() }
+        }
     }
 }
 

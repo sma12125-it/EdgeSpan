@@ -42,6 +42,16 @@ object CrashLog {
         }
     }
 
+    /** Records a one-line diagnostic (no stack trace) in the exported log. */
+    fun note(context: Context, line: String) {
+        Log.i(PhoneSession.TAG, line)
+        try {
+            val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+            file(context.applicationContext ?: context).appendText("$stamp  $line\n")
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun write(context: Context, title: String, thrown: Throwable) {
         val trace = StringWriter().also { thrown.printStackTrace(PrintWriter(it)) }.toString()
         val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())

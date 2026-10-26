@@ -38,16 +38,29 @@ public sealed class UsbConductor
     public bool StartUhid { get; init; } = true;
     public string? PreferSerial { get; init; }
 
+    /// <summary>How long the session may look disconnected before the USB setup is redone.</summary>
+    public int ReconnectGraceMs { get; init; } = 4000;
+
     public async Task Run(IAdbClient adb, CancellationToken token)
     {
+        var lastConnected = long.MinValue;
         while (!token.IsCancellationRequested)
         {
             try
             {
                 if (IsConnected())
                 {
+                    lastConnected = Environment.TickCount64;
                     Phase("connected", "pairOkUsb");
                     await Pause(1000, token);
+                    continue;
+                }
+                // A short blip of IsConnected() must not rerun the setup: StartInjection used to
+                // kill and restart the injection server, which silently broke the phone's socket
+                // to it and left "control on Android" with no cursor and no input.
+                if (lastConnected != long.MinValue && Environment.TickCount64 - lastConnected < ReconnectGraceMs)
+                {
+                    await Pause(500, token);
                     continue;
                 }
                 var serial = await Prepare(adb, token);
@@ -174,6 +187,15 @@ public sealed class UsbConductor
             Note("uhid-dex-missing");
             return;
         }
+        var alive = await Call(adb, token, "-s", serial, "shell", "sh", "-c",
+            "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill -0 $pid 2>/dev/null && echo server-alive");
+        if ((alive.Text ?? "").Contains("server-alive", StringComparison.Ordinal))
+        {
+            // Keep the running server so a connected phone keeps its injection socket.
+            Inject?.Invoke("injectUhid");
+            Note("uhid-kept");
+            return;
+        }
         await Call(adb, token, "-s", serial, "shell", "sh", "-c", "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill $pid");
         var pushed = await Call(adb, token, "-s", serial, "push", dex, "/data/local/tmp/edgestpan-server.dex");
         if (pushed.Code != 0 || pushed.TimedOut)
@@ -218,7 +240,11 @@ public sealed class UsbConductor
         {
             Note("access-already");
         }
-        await Call(adb, token, "-s", serial, "shell", "settings", "put", "secure", "accessibility_enabled", "1");
+        // Writing accessibility_enabled again rebinds the service (onUnbind clears its instance),
+        // so only write it when it is actually off.
+        var enabled = await Call(adb, token, "-s", serial, "shell", "settings", "get", "secure", "accessibility_enabled");
+        if (First(enabled.Text) != "1")
+            await Call(adb, token, "-s", serial, "shell", "settings", "put", "secure", "accessibility_enabled", "1");
         await Call(adb, token, "-s", serial, "shell", "dumpsys", "deviceidle", "whitelist", "+" + PackageName);
     }
 
