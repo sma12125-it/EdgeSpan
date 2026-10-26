@@ -77,6 +77,12 @@
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
     <!-- Navigation items: icon + label, rounded hover, accent pill on the selected item. -->
+    <Style Selector="WrapPanel.ctrl > :is(Control)">
+      <Setter Property="Margin" Value="0,2,8,2"/>
+    </Style>
+    <Style Selector="Border.compact TextBlock.navlabel">
+      <Setter Property="IsVisible" Value="False"/>
+    </Style>
     <Style Selector="ToggleButton.seg">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>

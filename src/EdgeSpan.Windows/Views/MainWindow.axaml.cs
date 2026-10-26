@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Avalonia.LogicalTree;
 using EdgeSpan.Product;
 using EdgeSpan.Session;
 using EdgeSpan.Windows.ViewModels;
@@ -176,14 +177,51 @@ public sealed partial class MainWindow : Window
 
     private void ApplyWidth(double width)
     {
-        var narrow = width < 860;
-        RootGrid.ColumnDefinitions[0].Width = new GridLength(narrow ? 0 : 292);
+        // Win11 nav: full pane >= 1080 px, icon-only rail 640-1080 px, top bar below 640 px.
+        var narrow = width < 640;
+        var compact = !narrow && width < 1080;
+        var navW = narrow ? 0 : compact ? 64 : 292;
+        RootGrid.ColumnDefinitions[0].Width = new GridLength(navW);
         SideNav.IsVisible = !narrow;
+        SideNav.Classes.Set("compact", compact);
+        SideNav.Padding = compact ? new Thickness(6, 16, 6, 16) : new Thickness(12, 16, 8, 16);
+        NavHeader.IsVisible = !compact;
         TopNav.IsVisible = narrow;
         // 24-36 px page margins (16 on very narrow windows), content centred with a 1000 px max width.
         var side = width < 560 ? 16 : width < 1100 ? 24 : 36;
         Pages.Padding = new Thickness(side, 0, side, 48);
         TitleRow.Margin = new Thickness(side, narrow ? 12 : 22, side, 14);
+        var content = Math.Min(1000, width - navW - side * 2 - 16);
+        // Arrange map scales with the available width (keeps roughly the monitor aspect).
+        MapHost.Height = Math.Clamp(content * 0.42, 180, 340);
+        // Setting rows: below ~620 px of content the control drops under its title instead of overflowing.
+        StackRows(content < 620);
+    }
+
+    private bool? _stacked;
+
+    private void StackRows(bool stacked)
+    {
+        if (_stacked == stacked)
+            return;
+        _stacked = stacked;
+        foreach (var border in PageStack.GetLogicalDescendants().OfType<Border>().Where(b => b.Classes.Contains("setting")))
+        {
+            if (border.Child is not Grid grid || grid.ColumnDefinitions.Count != 3)
+                continue;
+            var ctrl = grid.Children.OfType<WrapPanel>().FirstOrDefault(p => p.Classes.Contains("ctrl"));
+            if (ctrl == null)
+                continue;
+            if (grid.RowDefinitions.Count == 0)
+            {
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            }
+            Grid.SetRow(ctrl, stacked ? 1 : 0);
+            Grid.SetColumn(ctrl, stacked ? 1 : 2);
+            ctrl.Margin = stacked ? new Thickness(0, 8, 0, 0) : default;
+            ctrl.HorizontalAlignment = stacked ? Avalonia.Layout.HorizontalAlignment.Left : Avalonia.Layout.HorizontalAlignment.Stretch;
+        }
     }
 
     private void Identify()
