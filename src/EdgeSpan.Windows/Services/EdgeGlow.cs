@@ -41,6 +41,8 @@ public sealed class EdgeGlow : IDisposable
     private long _crossStart;
     private bool _crossing;
     private double _dpiScale = 1;
+    private double[] _linePos = Array.Empty<double>();
+    private double[] _lineOp = Array.Empty<double>();
     private WndProc? _wndProc;
 
     public void Show(GlowBand band, string? color, int intensity)
@@ -289,7 +291,6 @@ public sealed class EdgeGlow : IDisposable
         if (_pixels.Length != bytes)
             _pixels = new byte[bytes];
         var step = bytes > 180_000 * 4 ? 2 : 1;
-        var longSide = Math.Max(_width, _height);
         bool crossing;
         ElasticMode mode;
         double cross;
@@ -303,64 +304,57 @@ public sealed class EdgeGlow : IDisposable
             mode = _crossMode;
             cross = _crossAlong;
         }
-        var vertical = _height >= _width;
+        // Only the shared elastic boundary line is drawn now (the old soft halo/burst band is gone).
+        // Idle: a thin static teal line on the edge. Exit (Windows -> Android): the line sits inside
+        // the band and its Gaussian bulge at the crossing point is pulled out to the edge, then snaps
+        // back and fades. Enter (Android -> Windows): it is stretched inward at the entry point and tears.
+        var vertical = band.Edge is GlowEdge.Left or GlowEdge.Right || (band.Edge is not (GlowEdge.Top or GlowEdge.Bottom) && _height >= _width);
         var thickPx = Math.Max(1, vertical ? _width : _height);
-        var lineCore = 1.6 * _dpiScale / thickPx;
-        var lineHalo = lineCore * 5;
-        var rest = mode == ElasticMode.Exit ? 0.30 : 0.05;
-        // Accent teal-green #14B8A6 for the elastic line.
-        const double ar = 0x14, ag = 0xB8, ab = 0xA6;
-        double[]? linePos = null;
-        double[]? lineOp = null;
-        if (crossing)
+        var lineCore = 2.2 * _dpiScale / thickPx;
+        var lineHalo = 9.0 * _dpiScale / thickPx;
+        const double idleRest = 0.035;
+        var rest = !crossing ? idleRest : mode == ElasticMode.Exit ? ElasticLine.ExitDepth + idleRest : idleRest;
+        // Spec colour for the shared line on both platforms (teal #14B8A6), not the old glow colour.
+        double ar = (ElasticLine.Accent >> 16) & 0xFF, ag = (ElasticLine.Accent >> 8) & 0xFF, ab = ElasticLine.Accent & 0xFF;
+        _ = (r, g, b);
+        var n = vertical ? _height : _width;
+        if (_linePos.Length != n)
         {
-            var n = vertical ? _height : _width;
-            linePos = new double[n];
-            lineOp = new double[n];
-            for (var i = 0; i < n; i++)
+            _linePos = new double[n];
+            _lineOp = new double[n];
+        }
+        for (var i = 0; i < n; i++)
+        {
+            var a = n <= 1 ? 0 : i / (double)(n - 1);
+            if (crossing)
             {
-                var a = n <= 1 ? 0 : i / (double)(n - 1);
-                linePos[i] = rest + ElasticLine.Displacement(mode, a, cross, ms);
-                lineOp[i] = ElasticLine.Opacity(mode, a, cross, ms);
+                _linePos[i] = rest + ElasticLine.Displacement(mode, a, cross, ms);
+                // Exit: fade the inner line in over the first 40 ms so it reads as the edge line being grabbed.
+                var fadeIn = mode == ElasticMode.Exit ? Math.Clamp(ms / 40.0, 0, 1) : 1;
+                _lineOp[i] = ElasticLine.Opacity(mode, a, cross, ms) * fadeIn;
+            }
+            else
+            {
+                _linePos[i] = idleRest;
+                _lineOp[i] = 0.85;
             }
         }
+        var coreDen = 2 * lineCore * lineCore;
+        var haloDen = 2 * lineHalo * lineHalo;
         for (var y = 0; y < _height; y += step)
         {
             for (var x = 0; x < _width; x += step)
             {
-                var along = longSide <= 1 ? 0 : (band.Edge is GlowEdge.Left or GlowEdge.Right ? y : x) / (double)(longSide - 1);
-                var push = _reduce ? 0 : Math.Clamp(_burst.Value, 0, 1);
-                var bow = linePos != null ? 0 : ElasticLine.Bell(along, cross) * push * 0.42;
-                var dist = Math.Clamp(EdgeDistance(band.Edge, x, y, _width, _height) - bow, 0, 1);
-                var ripple = push > 0.45 && Math.Abs(dist - (push - 0.45) / 0.55) < 0.08 ? 0.35 : 0;
-                var fall = Math.Exp(-dist * dist * 5.2);
-                var core = dist < 0.08 ? 1 : fall;
-                var travel = 0.62 + 0.38 * (0.5 + 0.5 * Math.Sin(along * Math.PI * 4 + _phase));
-                var breathe = 0.86 + 0.14 * Math.Sin(_phase * 0.65);
-                var alpha = (byte)Math.Clamp((int)(255 * peak * Math.Max(core * 0.45, fall + ripple) * travel * breathe), 0, 255);
-                var hot = dist < 0.18 ? 1.0 : 0.82;
-                double cr = r * hot, cg = g * hot, cb = b * hot;
-                if (linePos != null && lineOp != null)
-                {
-                    // Under the elastic line, dim the static band so the line reads as one stroke.
-                    alpha = (byte)(alpha * 0.45);
-                    var idx = vertical ? y : x;
-                    var plain = EdgeDistance(band.Edge, x, y, _width, _height);
-                    var dd = plain - linePos[idx];
-                    var glow = lineOp[idx] * (Math.Exp(-dd * dd / (2 * lineCore * lineCore)) + 0.38 * Math.Exp(-dd * dd / (2 * lineHalo * lineHalo)));
-                    var la = Math.Clamp(glow, 0, 1) * 255;
-                    if (la > alpha)
-                    {
-                        var mix = la / 255.0;
-                        cr = cr * (1 - mix) + ar * mix + 60 * mix * Math.Exp(-dd * dd / (2 * lineCore * lineCore));
-                        cg = cg * (1 - mix) + ag * mix + 60 * mix * Math.Exp(-dd * dd / (2 * lineCore * lineCore));
-                        cb = cb * (1 - mix) + ab * mix + 60 * mix * Math.Exp(-dd * dd / (2 * lineCore * lineCore));
-                        alpha = (byte)la;
-                    }
-                }
-                var pb = (byte)Math.Clamp(cb * alpha / 255, 0, 255);
-                var pg = (byte)Math.Clamp(cg * alpha / 255, 0, 255);
-                var pr = (byte)Math.Clamp(cr * alpha / 255, 0, 255);
+                var idx = vertical ? y : x;
+                var plain = EdgeDistance(band.Edge, x, y, _width, _height);
+                var dd = plain - _linePos[idx];
+                var coreGlow = Math.Exp(-dd * dd / coreDen);
+                var glow = _lineOp[idx] * peak * (coreGlow + 0.42 * Math.Exp(-dd * dd / haloDen));
+                var alpha = (byte)Math.Clamp((int)(Math.Clamp(glow, 0, 1) * 255), 0, 255);
+                var lift = 70 * coreGlow;
+                var pb = (byte)Math.Clamp((ab + lift) * alpha / 255, 0, 255);
+                var pg = (byte)Math.Clamp((ag + lift) * alpha / 255, 0, 255);
+                var pr = (byte)Math.Clamp((ar + lift) * alpha / 255, 0, 255);
                 for (var yy = y; yy < Math.Min(_height, y + step); yy++)
                 {
                     for (var xx = x; xx < Math.Min(_width, x + step); xx++)

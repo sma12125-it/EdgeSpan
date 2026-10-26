@@ -271,7 +271,8 @@ public sealed class SessionRuntime : IDisposable
         var width = Math.Max(1, Host.Settings.ScreenWidth);
         var height = Math.Max(1, Host.Settings.ScreenHeight);
         var dpi = EdgeGlow.DpiAt(originX + width / 2, originY);
-        var thick = Math.Max(64, Math.Clamp(Host.Settings.EdgeGlowThickness, 8, 160)) * dpi / 96;
+        // The band must be deep enough for the bulge (ExitDepth/EnterDepth are fractions of it).
+        var thick = Math.Max(112, Math.Clamp(Host.Settings.EdgeGlowThickness, 8, 160)) * dpi / 96;
         var band = GlowBand.For(placement, originX, originY, width, height, Math.Max(1, thick));
         _glow.Show(band, Host.Settings.EdgeGlowColor, Host.Settings.EdgeGlowIntensity);
         return band;
