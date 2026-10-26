@@ -368,6 +368,9 @@
   "restartNow": {"en": "Restart now", "fa": "راه‌اندازی مجدد"},
   "savedChip": {"en": "Saved", "fa": "ذخیره شد"},
   "identify": {"en": "Identify", "fa": "شناسایی"},
+  "connectRelay": {"en": "Connect over the internet", "fa": "اتصال از طریق اینترنت"},
+  "scaleResolution": {"en": "By resolution", "fa": "براساس رزولوشن"},
+  "scaleUniform": {"en": "Uniform (1:1)", "fa": "یکسان (۱:۱)"},
   "detect": {"en": "Detect", "fa": "تشخیص"},
   "autosaveHint": {"en": "Changes are saved automatically", "fa": "تغییرات به‌طور خودکار ذخیره می‌شوند"}
 }

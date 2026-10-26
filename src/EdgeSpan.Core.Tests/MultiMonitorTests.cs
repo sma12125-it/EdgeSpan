@@ -109,4 +109,37 @@ public sealed class MultiMonitorTests
         m.SetHostCursor(2550, 100);
         Assert.IsType<Transition.Enter>(m.MoveHost(2565, 100));
     }
+
+    [Fact]
+    public void UniformScaleMapsFullHeightOneToOneAcrossMonitorDeviceMonitor()
+    {
+        var m = Machine(Tab(M1, ScreenEdge.Right));
+        m.UniformScale = true;
+        var tab = m.Devices[0];
+        // The whole 1440 px right edge of monitor 1 is the crossing zone, even below the tablet's 1200 px.
+        Assert.Equal((0, 1440), m.Segment(tab, m.MonitorFor(tab)));
+
+        // Monitor 1 at 3/4 height -> tablet at 3/4 height.
+        m.SetHostCursor(2550, 1080);
+        var enter = Assert.IsType<Transition.Enter>(m.MoveHost(2565, 1080));
+        Assert.Equal(900, enter.Y);
+
+        // Tablet 3/4 height -> monitor 2 at 3/4 of ITS height (810 of 1080), not the same pixel row.
+        var through = Assert.IsType<Transition.Return>(m.MoveDeviceBy(3000, 0));
+        Assert.True(through.Through);
+        Assert.Equal((2560, 810), (through.HostX, through.HostY));
+    }
+
+    [Fact]
+    public void UniformScaleReturnToSameMonitorIsProportional()
+    {
+        var m = Machine(Tab(M1, ScreenEdge.Right));
+        m.UniformScale = true;
+        m.SetHostCursor(2550, 360);
+        var enter = Assert.IsType<Transition.Enter>(m.MoveHost(2565, 360));
+        Assert.Equal(300, enter.Y);
+        m.MoveDeviceBy(20, 0);
+        var back = Assert.IsType<Transition.Return>(m.MoveDeviceBy(-100, 0));
+        Assert.Equal((2559, 360), (back.HostX, back.HostY));
+    }
 }

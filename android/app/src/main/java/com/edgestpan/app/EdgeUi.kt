@@ -540,8 +540,8 @@ private fun Home(strings: Map<String, String>, name: String, backend: String, st
             Stat(strings["connectionPath"] ?: "", if (status.isBlank()) strings["waiting"] ?: "" else strings["pathLan"] ?: "LAN", Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice(strings["backendAccess"] ?: "", mode == "access") { mode = "access" }
-            Choice(strings["backendAdb"] ?: "", mode == "adb") { mode = "adb" }
+            Choice(strings["backendAccess"] ?: "", mode == "access") { mode = "access"; onSave(name, link, mode) }
+            Choice(strings["backendAdb"] ?: "", mode == "adb") { mode = "adb"; onSave(name, link, mode) }
         }
         Text(if (mode == "adb") strings["adbSteps"] ?: "" else strings["gestureNote"] ?: "", color = Muted())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -637,14 +637,27 @@ private fun Settings(strings: Map<String, String>, rtl: Boolean, dark: Boolean, 
 @Composable
 private fun ArrangePage(strings: Map<String, String>, rtl: Boolean, title: String, status: String, peers: String) {
     PageColumn {
+        val prefs = LocalContext.current.getSharedPreferences("edgestpan", android.content.Context.MODE_PRIVATE)
+        var uniform by remember { mutableStateOf(prefs.getString("arrangeScale", "resolution") == "uniform") }
+        val setMode = { u: Boolean -> uniform = u; prefs.edit().putString("arrangeScale", if (u) "uniform" else "resolution").apply() }
         Text(title, style = MaterialTheme.typography.headlineMedium, fontSize = 30.sp)
+        Row(Modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface).padding(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Choice(tx(rtl, "By resolution", "براساس رزولوشن"), !uniform) { setMode(false) }
+            Choice(tx(rtl, "Uniform (1:1)", "یکسان (۱:۱)"), uniform) { setMode(true) }
+        }
         Card {
             Canvas(Modifier.fillMaxWidth().height(160.dp)) {
                 val w = size.width; val h = size.height
-                drawRoundRect(Color(0x223B6CFF), Offset(w * 0.12f, h * 0.18f), Size(w * 0.46f, h * 0.64f), CornerRadius(12f, 12f))
-                drawRoundRect(Blue, Offset(w * 0.12f, h * 0.18f), Size(w * 0.46f, h * 0.64f), CornerRadius(12f, 12f), style = Stroke(2f * density))
-                drawRoundRect(Mint, Offset(w * 0.60f, h * 0.30f), Size(w * 0.20f, h * 0.40f), CornerRadius(10f, 10f))
-                drawLine(Mint, Offset(w * 0.58f, h * 0.30f), Offset(w * 0.58f, h * 0.70f), strokeWidth = 3f * density, cap = StrokeCap.Round)
+                // Tiles always touch edge-to-edge; uniform draws both at the same size with aligned top/bottom.
+                val pcW = if (uniform) w * 0.36f else w * 0.46f
+                val pcH = if (uniform) h * 0.56f else h * 0.64f
+                val tabW = if (uniform) pcW else w * 0.20f
+                val tabH = if (uniform) pcH else h * 0.40f
+                val x0 = (w - pcW - tabW) / 2f
+                val y0 = (h - pcH) / 2f
+                drawRoundRect(Color(0x223B6CFF), Offset(x0, y0), Size(pcW, pcH), CornerRadius(12f, 12f))
+                drawRoundRect(Blue, Offset(x0, y0), Size(pcW, pcH), CornerRadius(12f, 12f), style = Stroke(2f * density))
+                drawRoundRect(Mint, Offset(x0 + pcW, if (uniform) y0 else y0), Size(tabW, tabH), CornerRadius(10f, 10f))
             }
             Text(tx(rtl, "Your tablet sits next to the PC's monitors. Drag it to any edge of any monitor in EdgeSpan on Windows → Arrange; the layout is saved there per monitor setup.",
                 "تبلت کنار مانیتورهای رایانه قرار می‌گیرد. در EdgeSpan روی ویندوز ← چیدمان، آن را به هر لبهٔ هر مانیتور بکشید؛ چیدمان برای هر پیکربندی مانیتور ذخیره می‌شود."), color = Muted())

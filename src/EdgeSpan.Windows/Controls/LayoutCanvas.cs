@@ -23,6 +23,9 @@ public sealed class LayoutCanvas : Control
         AvaloniaProperty.Register<LayoutCanvas, string?>(nameof(ActiveId));
     public static readonly StyledProperty<string?> SelectedIdProperty =
         AvaloniaProperty.Register<LayoutCanvas, string?>(nameof(SelectedId));
+    public static readonly StyledProperty<bool> UniformProperty =
+        AvaloniaProperty.Register<LayoutCanvas, bool>(nameof(Uniform));
+    public bool Uniform { get => GetValue(UniformProperty); set => SetValue(UniformProperty, value); }
     public static readonly StyledProperty<string?> HostLabelProperty =
         AvaloniaProperty.Register<LayoutCanvas, string?>(nameof(HostLabel), "PC");
 
@@ -42,12 +45,13 @@ public sealed class LayoutCanvas : Control
     private bool _moved;
     private (Rect Free, Snapped Snap)? _preview;
     private double _scale = 1, _ox, _oy;
+    // Note: _drag is in world units of the layout at drag start, so the scale must not jump mid-drag.
 
     private readonly record struct Snapped(HostMonitor Monitor, ScreenEdge Edge, int Offset, Rect Rect);
 
     static LayoutCanvas()
     {
-        AffectsRender<LayoutCanvas>(DevicesProperty, MonitorsProperty, ActiveIdProperty, SelectedIdProperty, HostLabelProperty);
+        AffectsRender<LayoutCanvas>(DevicesProperty, MonitorsProperty, ActiveIdProperty, SelectedIdProperty, HostLabelProperty, UniformProperty);
     }
 
     public LayoutCanvas() => Cursor = new Cursor(StandardCursorType.Hand);
@@ -67,7 +71,7 @@ public sealed class LayoutCanvas : Control
     private static (double W, double H) Size(DeviceSnapshot d) =>
         (d.ScreenW > 0 ? Math.Clamp(d.ScreenW, 400, 4000) : 1600, d.ScreenH > 0 ? Math.Clamp(d.ScreenH, 400, 4000) : 1000);
 
-    private static Rect PlaceOn(HostMonitor m, ScreenEdge edge, int offset, double w, double h) => edge switch
+    private static Rect PlaceOn(Rect m, ScreenEdge edge, int offset, double w, double h) => edge switch
     {
         ScreenEdge.Left => new Rect(m.X - w, m.Y + offset, w, h),
         ScreenEdge.Top => new Rect(m.X + offset, m.Y - h, w, h),
@@ -75,65 +79,123 @@ public sealed class LayoutCanvas : Control
         _ => new Rect(m.Right, m.Y + offset, w, h)
     };
 
-    private Rect Place(DeviceSnapshot d)
+    private static Rect R(HostMonitor m) => new(m.X, m.Y, m.W, m.H);
+
+    /// <summary>Where a device is attached: monitor, edge, offset (corner anchors are treated as after the monitor).</summary>
+    private readonly record struct Attach(HostMonitor Monitor, ScreenEdge Edge, int Offset, string? Corner);
+
+    private Attach AttachOf(DeviceSnapshot d)
     {
         var m = MonitorOf(d);
-        var (w, h) = Size(d);
         if (string.Equals(d.Anchor, "Corner", StringComparison.OrdinalIgnoreCase))
-        {
-            return d.Corner switch
-            {
-                "TopLeft" => new Rect(m.X - w, m.Y - h, w, h),
-                "BottomLeft" => new Rect(m.X - w, m.Bottom, w, h),
-                "BottomRight" => new Rect(m.Right, m.Bottom, w, h),
-                _ => new Rect(m.Right, m.Y - h, w, h)
-            };
-        }
+            return new Attach(m, d.Corner is "TopLeft" or "BottomLeft" ? ScreenEdge.Left : ScreenEdge.Right, 0, d.Corner ?? "TopRight");
         PlacementParser.TryEdge(d.PcEdge, out var edge);
-        return PlaceOn(m, edge, Math.Max(0, d.OffsetPx), w, h);
+        return new Attach(m, edge, Math.Max(0, d.OffsetPx), null);
     }
 
-    /// <summary>A device placed on an edge another monitor continues from sits between them: draw it on the seam.</summary>
-    private Rect Between(Rect r, DeviceSnapshot d, out bool between)
+    // Uniform cell: every display (monitor or Android) is drawn at this one size, top and bottom edges aligned.
+    private const double CellW = 1600, CellH = 1000;
+
+    /// <summary>
+    /// Drawn rectangles for monitors and devices in world units. Never overlapping:
+    /// "By resolution" keeps real positions/sizes and pushes the monitors beyond a device's seam outward by the
+    /// device's size, so a tablet between monitors 1 and 2 sits edge-to-edge between them instead of on top.
+    /// "Uniform" draws one row of identical cells ordered by the arrangement.
+    /// </summary>
+    private (Rect[] Mons, Dictionary<string, Rect> Devs) Layout(string? overrideId = null, Attach? over = null)
     {
-        between = false;
-        var m = MonitorOf(d);
-        PlacementParser.TryEdge(d.PcEdge, out var edge);
-        foreach (var n in Mons())
+        var mons = Mons();
+        var devices = Devices ?? Array.Empty<DeviceSnapshot>();
+        Attach Of(DeviceSnapshot d) => d.Id == overrideId && over is { } o ? o : AttachOf(d);
+        var devs = new Dictionary<string, Rect>();
+        if (Uniform)
         {
-            if (n == m)
-                continue;
-            var touch = edge switch
+            var order = mons.Select((m, i) => (m, i)).OrderBy(x => x.m.X).ThenBy(x => x.m.Y).Select(x => x.i).ToList();
+            var seq = new List<(double Key, int Mon, string? Dev)>();
+            for (var k = 0; k < order.Count; k++)
+                seq.Add((k, order[k], null));
+            var n = 0;
+            foreach (var d in devices)
             {
-                ScreenEdge.Right => n.X == m.Right && n.Y < r.Bottom && n.Bottom > r.Y,
-                ScreenEdge.Left => n.Right == m.X && n.Y < r.Bottom && n.Bottom > r.Y,
-                ScreenEdge.Bottom => n.Y == m.Bottom && n.X < r.Right && n.Right > r.X,
-                _ => n.Bottom == m.Y && n.X < r.Right && n.Right > r.X
-            };
-            if (!touch)
-                continue;
-            between = true;
-            var vertical = edge is ScreenEdge.Left or ScreenEdge.Right;
-            var thin = (vertical ? r.Width : r.Height) * 0.34;
-            var seam = edge switch { ScreenEdge.Right => m.Right, ScreenEdge.Left => m.X, ScreenEdge.Bottom => m.Bottom, _ => m.Y };
-            return vertical ? new Rect(seam - thin / 2, r.Y, thin, r.Height) : new Rect(r.X, seam - thin / 2, r.Width, thin);
+                var at = Of(d);
+                var k = order.IndexOf(Array.IndexOf(mons.ToArray(), at.Monitor));
+                if (k < 0) k = 0;
+                var after = at.Edge is ScreenEdge.Right or ScreenEdge.Bottom;
+                seq.Add((k + (after ? 0.5 : -0.5) + (++n) * 1e-4, -1, d.Id));
+            }
+            seq.Sort((x, y) => x.Key.CompareTo(y.Key));
+            var rects = new Rect[mons.Count];
+            for (var i = 0; i < seq.Count; i++)
+            {
+                var r = new Rect(i * CellW, 0, CellW, CellH);
+                if (seq[i].Dev is { } id) devs[id] = r; else rects[seq[i].Mon] = r;
+            }
+            return (rects, devs);
         }
-        return r;
+        var mr = mons.Select(R).ToArray();
+        foreach (var d in devices)
+        {
+            var at = Of(d);
+            var (w, h) = Size(d);
+            var mi = Math.Max(0, Array.IndexOf(mons.ToArray(), at.Monitor));
+            var m = mr[mi];
+            Rect r;
+            if (at.Corner is { } c)
+                r = c switch
+                {
+                    "TopLeft" => new Rect(m.X - w, m.Y - h, w, h),
+                    "BottomLeft" => new Rect(m.X - w, m.Bottom, w, h),
+                    "BottomRight" => new Rect(m.Right, m.Bottom, w, h),
+                    _ => new Rect(m.Right, m.Y - h, w, h)
+                };
+            else
+            {
+                var len = at.Edge is ScreenEdge.Left or ScreenEdge.Right ? m.Height : m.Width;
+                r = PlaceOn(m, at.Edge, (int)Math.Min(at.Offset, Math.Max(0, len - 40)), w, h);
+                // Make room: everything on the far side of the seam moves out by the device's size.
+                var shift = at.Edge switch
+                {
+                    ScreenEdge.Right => new Vector(w, 0), ScreenEdge.Left => new Vector(-w, 0),
+                    ScreenEdge.Bottom => new Vector(0, h), _ => new Vector(0, -h)
+                };
+                bool Beyond(Rect o) => at.Edge switch
+                {
+                    ScreenEdge.Right => o.X >= m.Right - 0.5, ScreenEdge.Left => o.Right <= m.X + 0.5,
+                    ScreenEdge.Bottom => o.Y >= m.Bottom - 0.5, _ => o.Bottom <= m.Y + 0.5
+                };
+                for (var i = 0; i < mr.Length; i++)
+                    if (i != mi && Beyond(mr[i]))
+                        mr[i] = mr[i].Translate(shift);
+                foreach (var key in devs.Keys.ToList())
+                    if (Beyond(devs[key]))
+                        devs[key] = devs[key].Translate(shift);
+            }
+            devs[d.Id] = r;
+        }
+        return (mr, devs);
     }
 
-    private Snapped Snap(Rect free, double w, double h)
+    private Snapped Snap(Rect free, DeviceSnapshot d)
     {
+        var mons = Mons();
         Snapped? best = null;
         var bestScore = double.MaxValue;
-        foreach (var m in Mons())
+        for (var i = 0; i < mons.Count; i++)
         {
             foreach (var edge in new[] { ScreenEdge.Left, ScreenEdge.Right, ScreenEdge.Top, ScreenEdge.Bottom })
             {
-                var vertical = edge is ScreenEdge.Left or ScreenEdge.Right;
-                var len = vertical ? m.H : m.W;
-                var raw = vertical ? free.Y - m.Y : free.X - m.X;
-                var offset = (int)Math.Clamp(Math.Round(raw / 10) * 10, 0, Math.Max(0, len - 40));
-                var r = PlaceOn(m, edge, offset, w, h);
+                if (Uniform && edge is ScreenEdge.Top or ScreenEdge.Bottom)
+                    continue; // one row: before or after a monitor
+                var m = mons[i];
+                var offset = 0;
+                if (!Uniform)
+                {
+                    var mr = Layout(d.Id, new Attach(m, edge, 0, null)).Mons[i];
+                    var vertical = edge is ScreenEdge.Left or ScreenEdge.Right;
+                    var raw = vertical ? free.Y - mr.Y : free.X - mr.X;
+                    offset = (int)Math.Clamp(Math.Round(raw / 10) * 10, 0, Math.Max(0, (vertical ? m.H : m.W) - 40));
+                }
+                var r = Layout(d.Id, new Attach(m, edge, offset, null)).Devs[d.Id];
                 var score = Math.Abs(r.Center.X - free.Center.X) + Math.Abs(r.Center.Y - free.Center.Y);
                 if (score < bestScore)
                 {
@@ -153,11 +215,16 @@ public sealed class LayoutCanvas : Control
         var dark = ActualThemeVariant == ThemeVariant.Dark;
         var monitors = Mons();
         var devices = Devices ?? Array.Empty<DeviceSnapshot>();
-        var all = monitors.Select(m => new Rect(m.X, m.Y, m.W, m.H)).Concat(devices.Select(Place)).ToList();
+        var lay = _preview is { } p0 && _dragId != null
+            ? Layout(_dragId, new Attach(p0.Snap.Monitor, p0.Snap.Edge, p0.Snap.Offset, null))
+            : Layout();
+        if (_preview == null)
+            _rest = lay;
+        var all = lay.Mons.Concat(lay.Devs.Values).ToList();
         if (_preview is { } pv)
             all.Add(pv.Free);
         var world = all.Aggregate((a, b) => a.Union(b));
-        var pad = Math.Max(world.Width, world.Height) * 0.08;
+        var pad = Math.Max(world.Width, world.Height) * 0.06;
         world = world.Inflate(pad);
         _scale = Math.Min(bounds.Width / world.Width, bounds.Height / world.Height);
         _ox = (bounds.Width - world.Width * _scale) / 2 - world.X * _scale;
@@ -175,7 +242,7 @@ public sealed class LayoutCanvas : Control
         for (var i = 0; i < monitors.Count; i++)
         {
             var m = monitors[i];
-            var r = Map(new Rect(m.X, m.Y, m.W, m.H)).Deflate(gap);
+            var r = Map(lay.Mons[i]).Deflate(gap);
             context.DrawRectangle(tile, tileLine, r, 6, 6);
             Label(context, r, (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 m.Primary ? (HostLabel ?? "PC") + " · primary" : $"{m.W} × {m.H}", ink, muted);
@@ -185,20 +252,19 @@ public sealed class LayoutCanvas : Control
         foreach (var d in devices)
         {
             number++;
-            var dragging = d.Id == _dragId && _preview != null;
-            var r = dragging ? _preview!.Value.Snap.Rect : Place(d);
-            var drawn = Between(r, d, out _);
-            if (dragging)
-                drawn = r;
+            if (!lay.Devs.TryGetValue(d.Id, out var drawn))
+                continue;
             var mapped = Map(drawn).Deflate(gap);
-            if (dragging)
-                context.DrawRectangle(new SolidColorBrush(Color.FromArgb(40, 59, 108, 255)), null, Map(_preview!.Value.Free).Deflate(gap), 6, 6);
+            if (d.Id == _dragId && _preview is { } pf)
+                context.DrawRectangle(new SolidColorBrush(Color.FromArgb(40, 59, 108, 255)), null, Map(pf.Free).Deflate(gap), 6, 6);
             context.DrawRectangle(teal, tealLine, mapped, 6, 6);
             if (d.Id == SelectedId || d.Id == _dragId || d.Id == ActiveId)
                 context.DrawRectangle(null, accent, mapped.Deflate(1), 6, 6);
             Label(context, mapped, number.ToString(System.Globalization.CultureInfo.InvariantCulture), d.Name, ink, muted);
         }
     }
+
+    private (Rect[] Mons, Dictionary<string, Rect> Devs)? _rest;
 
     private Rect Map(Rect r) => new(_ox + r.X * _scale, _oy + r.Y * _scale, Math.Max(6, r.Width * _scale), Math.Max(6, r.Height * _scale));
 
@@ -222,8 +288,9 @@ public sealed class LayoutCanvas : Control
     private string? Hit(Point point)
     {
         var devices = Devices ?? Array.Empty<DeviceSnapshot>();
+        var lay = Layout();
         foreach (var d in devices.Reverse())
-            if (Map(Between(Place(d), d, out _)).Contains(point))
+            if (lay.Devs.TryGetValue(d.Id, out var r) && Map(r).Contains(point))
                 return d.Id;
         return null;
     }
@@ -259,9 +326,9 @@ public sealed class LayoutCanvas : Control
         if (d == null)
             return;
         _drag = new Vector(delta.X / _scale, delta.Y / _scale);
-        var free = Place(d).Translate(_drag);
-        var (w, h) = Size(d);
-        _preview = (free, Snap(free, w, h));
+        var start = (_rest ?? Layout()).Devs.TryGetValue(d.Id, out var r0) ? r0 : new Rect(0, 0, CellW, CellH);
+        var free = start.Translate(_drag);
+        _preview = (free, Snap(free, d));
         InvalidateVisual();
     }
 

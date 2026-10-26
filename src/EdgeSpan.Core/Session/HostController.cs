@@ -156,6 +156,7 @@ public sealed class HostController : IDisposable
             _links[device.Id] = link;
         }
         Machine.SetScreen(Settings.ScreenOriginX, Settings.ScreenOriginY, Settings.ScreenWidth, Settings.ScreenHeight);
+        Machine.UniformScale = Settings.ArrangeScale == "uniform";
         _parkX = Settings.ScreenOriginX + Settings.ScreenWidth / 2;
         _parkY = Settings.ScreenOriginY + Settings.ScreenHeight / 2;
         ReloadLayout();
@@ -1155,6 +1156,17 @@ public sealed class HostController : IDisposable
     public List<DiscoveredPeer> SnapshotDiscovered()
     {
         lock (_gate) return _discovered.Values.OrderBy(d => d.Name).ToList();
+    }
+
+    public void SetArrangeScale(string mode)
+    {
+        lock (_gate)
+        {
+            Settings.ArrangeScale = mode == "uniform" ? "uniform" : "resolution";
+            Machine.UniformScale = Settings.ArrangeScale == "uniform";
+        }
+        Save();
+        Touch();
     }
 
     public void Save()

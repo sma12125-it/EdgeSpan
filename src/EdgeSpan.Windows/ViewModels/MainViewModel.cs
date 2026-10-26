@@ -426,6 +426,27 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string DisplayName { get; set; } = "";
     public decimal? ListenPort { get; set; } = ProductInfo.DefaultSessionPort;
     public bool ClipboardShare { get; set; } = true;
+
+    /// <summary>Arrange segmented control; saved instantly (Windows 11 style) and applied to edge mapping live.</summary>
+    public bool ScaleUniform
+    {
+        get => _runtime.Host.Settings.ArrangeScale == "uniform";
+        set
+        {
+            if (value == ScaleUniform)
+                return;
+            _runtime.Host.SetArrangeScale(value ? "uniform" : "resolution");
+            Notify(nameof(ScaleUniform));
+            Notify(nameof(ScaleByResolution));
+            MarkSaved();
+        }
+    }
+
+    public bool ScaleByResolution
+    {
+        get => !ScaleUniform;
+        set { if (value) ScaleUniform = false; else Notify(nameof(ScaleByResolution)); }
+    }
     public bool LaunchAtStartup { get; set; }
     public string HotkeySwitch { get; set; } = "";
     public string HotkeyLock { get; set; } = "";

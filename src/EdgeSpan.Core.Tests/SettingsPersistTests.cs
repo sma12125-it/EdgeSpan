@@ -13,7 +13,7 @@ public sealed class SettingsPersistTests
         var path = Path.Combine(Path.GetTempPath(), "edgespan-test-" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
-            var s = new AppSettings { DisplayName = "Desk", ClipboardShare = false, EdgeGlowIntensity = 37, ListenPort = 40123 };
+            var s = new AppSettings { DisplayName = "Desk", ClipboardShare = false, EdgeGlowIntensity = 37, ListenPort = 40123, ArrangeScale = "uniform" };
             s.Devices.Add(new DeviceConfig { Id = "tab", Name = "Tab", Address = "10.0.0.5", Monitor = @"\\.\DISPLAY2", PcEdge = "Right", ReturnEdge = "Left", OffsetPx = 120 });
             var two = new[] { new HostMonitor(@"\\.\DISPLAY1", 0, 0, 2560, 1440, 144, true), new HostMonitor(@"\\.\DISPLAY2", 2560, 0, 1920, 1080) };
             using (var host = new HostController(s, () => 0, new SystemRandomBytes(), null, null, path))
@@ -26,6 +26,7 @@ public sealed class SettingsPersistTests
             Assert.False(loaded.ClipboardShare);
             Assert.Equal(37, loaded.EdgeGlowIntensity);
             Assert.Equal(40123, loaded.ListenPort);
+            Assert.Equal("uniform", loaded.ArrangeScale);
             var dev = Assert.Single(loaded.Devices);
             Assert.Equal(@"\\.\DISPLAY2", dev.Monitor);
             Assert.Equal(120, dev.OffsetPx);
@@ -33,6 +34,7 @@ public sealed class SettingsPersistTests
 
             // Unplug monitor 2: the device falls back to the primary; plug it back: its saved layout returns.
             using var again = new HostController(loaded, () => 0, new SystemRandomBytes(), null, null, path);
+            Assert.True(again.Machine.UniformScale);
             again.SetHostMonitors(new[] { two[0] });
             Assert.Equal(@"\\.\DISPLAY1", again.Machine.MonitorFor(again.Machine.Devices[0]).Id);
             loaded.Devices[0].Monitor = @"\\.\DISPLAY1";

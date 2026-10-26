@@ -236,6 +236,12 @@ public sealed class EdgeMachine
     public bool ReturnArmed { get; private set; }
     public IReadOnlyList<DevicePlacement> Devices => _devices;
 
+    /// <summary>
+    /// Uniform (1:1 scale) arrangement: every attach edge is the monitor's FULL edge, so the whole height
+    /// (or width) of one screen maps proportionally onto the whole height of the next, ignoring pixel counts and offsets.
+    /// </summary>
+    public bool UniformScale { get; set; }
+
     /// <summary>Explicit monitors; when none were set the whole SetScreen rect acts as one primary monitor.</summary>
     public IReadOnlyList<HostMonitor> Monitors => _monitors.Count > 0
         ? _monitors
@@ -297,6 +303,8 @@ public sealed class EdgeMachine
         var vertical = device.PcEdge is ScreenEdge.Left or ScreenEdge.Right;
         var start = vertical ? m.Y : m.X;
         var len = vertical ? m.H : m.W;
+        if (UniformScale)
+            return (start, start + len);
         var lo = start + Math.Clamp(device.OffsetPx, 0, Math.Max(0, len - 1));
         var hi = Math.Min(start + len, lo + EffectiveSpan(device));
         return (lo, hi);
@@ -618,6 +626,12 @@ public sealed class EdgeMachine
     private void MapThrough(DevicePlacement device, HostMonitor next, int devX, int devY, out int hostX, out int hostY)
     {
         var along = AlongOnSegment(device, MonitorFor(device), devX, devY);
+        if (UniformScale)
+        {
+            var alongDev = device.ReturnEdge is ScreenEdge.Left or ScreenEdge.Right ? devY : devX;
+            var vertical = device.PcEdge is ScreenEdge.Left or ScreenEdge.Right;
+            along = (vertical ? next.Y : next.X) + Scale(alongDev, AlongLength(device), vertical ? next.H : next.W);
+        }
         switch (device.PcEdge)
         {
             case ScreenEdge.Right:

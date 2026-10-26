@@ -38,6 +38,8 @@ public sealed class AppSettings
     public int ScreenOriginX { get; set; }
     public int ScreenOriginY { get; set; }
     public bool ClipboardShare { get; set; } = true;
+    /// <summary>Arrange page scale: "resolution" (tiles by pixel size) or "uniform" (all displays same size, full edge maps 1:1).</summary>
+    public string ArrangeScale { get; set; } = "resolution";
     public bool FileTransfer { get; set; } = true;
     public string PublicHost { get; set; } = "";
     public int PublicPort { get; set; }
@@ -102,6 +104,8 @@ public static class SettingsStore
             settings.HotkeySwitch = "Ctrl+Alt+Space";
         if (settings.Handoff is not ("off" or "pc" or "phone" or "both"))
             settings.Handoff = "off";
+        if (settings.ArrangeScale is not ("resolution" or "uniform"))
+            settings.ArrangeScale = "resolution";
         if (settings.HandoffQuality is not ("sharp" or "smooth" or "saver"))
             settings.HandoffQuality = "sharp";
         settings.EdgeGlowIntensity = Math.Clamp(settings.EdgeGlowIntensity, 0, 100);
