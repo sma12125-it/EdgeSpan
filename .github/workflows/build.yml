@@ -1,0 +1,103 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK packages
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+      - name: Prepare keystore
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          mkdir -p android/keystore
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > android/keystore/edgestpan-dev.keystore
+            echo "Using keystore from secrets."
+          else
+            echo "::warning::ANDROID_KEYSTORE_B64 not set; build-android.sh will generate a throwaway keystore. The APK will not upgrade over existing installs."
+          fi
+      - name: Build APK and server dex
+        env:
+          EDGESPAN_KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'edgestpan-dev' }}
+          EDGESPAN_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD || 'edgestpan-dev' }}
+          EDGESPAN_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'edgestpan' }}
+        run: |
+          chmod +x android/gradlew scripts/*.sh
+          scripts/build-android.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EdgeSpan-Android-apk
+          path: publish/android-server/EdgeSpan-Android.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edgestpan-server-dex
+          path: publish/android-server/edgestpan-server.dex
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    needs: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: edgestpan-server-dex
+          path: publish/android-server
+      - name: Fetch Windows platform-tools (adb)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile "$env:RUNNER_TEMP\pt.zip"
+          Expand-Archive "$env:RUNNER_TEMP\pt.zip" -DestinationPath "$env:RUNNER_TEMP\ptwin"
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            if (-not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) { choco install nsis -y --no-progress }
+          }
+          "${env:ProgramFiles(x86)}\NSIS" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Publish and build installer
+        shell: bash
+        run: |
+          export EDGESPAN_ADB_DIR="$(cygpath -u "$RUNNER_TEMP")/ptwin/platform-tools"
+          bash scripts/publish-windows.sh
+          test -f publish/EdgeSpan-Setup.exe
+          ls -la publish/win-x64 publish/EdgeSpan-Setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EdgeSpan-Setup-exe
+          path: publish/EdgeSpan-Setup.exe
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/EdgeSpan-Android-apk/EdgeSpan-Android.apk
+            dist/EdgeSpan-Setup-exe/EdgeSpan-Setup.exe

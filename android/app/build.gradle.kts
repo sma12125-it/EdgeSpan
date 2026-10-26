@@ -6,6 +6,10 @@ plugins {
 }
 
 val keystore = rootProject.file("keystore/edgestpan-dev.keystore")
+// CI may supply a different keystore's credentials; defaults match the dev keystore.
+val ksStorePass = System.getenv("EDGESPAN_KS_PASS") ?: "edgestpan-dev"
+val ksKeyPass = System.getenv("EDGESPAN_KEY_PASS") ?: ksStorePass
+val ksAlias = System.getenv("EDGESPAN_KEY_ALIAS") ?: "edgestpan"
 
 android {
     namespace = "com.edgestpan.app"
@@ -35,9 +39,9 @@ android {
     signingConfigs {
         create("dev") {
             storeFile = keystore
-            storePassword = "edgestpan-dev"
-            keyAlias = "edgestpan"
-            keyPassword = "edgestpan-dev"
+            storePassword = ksStorePass
+            keyAlias = ksAlias
+            keyPassword = ksKeyPass
             enableV1Signing = true
             enableV2Signing = true
             enableV3Signing = true

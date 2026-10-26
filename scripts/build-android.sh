@@ -7,11 +7,14 @@ if [[ -z "$sdk" || ! -d "$sdk" ]]; then
   exit 1
 fi
 cd "$root/android"
+ks_pass="${EDGESPAN_KS_PASS:-edgestpan-dev}"
+key_pass="${EDGESPAN_KEY_PASS:-$ks_pass}"
+ks_alias="${EDGESPAN_KEY_ALIAS:-edgestpan}"
 ks="$root/android/keystore/edgestpan-dev.keystore"
 if [[ ! -f "$ks" ]]; then
   mkdir -p "$root/android/keystore"
   keytool -genkeypair -keystore "$ks" \
-    -storepass edgestpan-dev -keypass edgestpan-dev -alias edgestpan \
+    -storepass "$ks_pass" -keypass "$key_pass" -alias "$ks_alias" \
     -keyalg RSA -keysize 2048 -validity 10000 \
     -dname "CN=EdgeSpan Dev, OU=EdgeSpan, O=EdgeSpan, L=Test, ST=Test, C=US"
 fi
@@ -56,9 +59,9 @@ align="$(find "$sdk/build-tools" -type f -name zipalign | sort | tail -1)"
 signed="$server_dir/EdgeSpan-Android.apk"
 "$bt" sign \
   --ks "$ks" \
-  --ks-pass pass:edgestpan-dev \
-  --key-pass pass:edgestpan-dev \
-  --ks-key-alias edgestpan \
+  --ks-pass pass:"$ks_pass" \
+  --key-pass pass:"$key_pass" \
+  --ks-key-alias "$ks_alias" \
   --v1-signing-enabled true \
   --v2-signing-enabled true \
   --v3-signing-enabled true \
