@@ -84,16 +84,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import kotlinx.coroutines.delay
 
 private val Night = Color(0xFF202020)
-private val NightCard = Color(0xFF2C2C2C)
+private val NightCard = Color(0xFF2B2B2B)
 private val Paper = Color(0xFFF3F3F3)
 private val Ink = Color(0xFF1A1A1A)
 private val MutedDark = Color(0xFFC8C8C8)
 private val MutedLight = Color(0xFF5D5D5D)
-private val Blue = Color(0xFF0067C0)
-private val BlueLift = Color(0xFF60CDFF)
-private val Mint = Color(0xFF3DDC84)
+private val Blue = Color(0xFF3B6CFF)
+private val BlueLift = Color(0xFF7C9BFF)
+private val Mint = Color(0xFF14B8A6)
 private val Gold = Color(0xFFF0B429)
 private val LocalReduce = staticCompositionLocalOf { false }
 
@@ -179,8 +187,16 @@ fun EdgeSpanApp(
                     Onboarding(strings) { setup = false; onFinishOnboarding() }
                 } else {
                     var tab by remember { mutableIntStateOf(0) }
-                    Column(Modifier.fillMaxSize()) {
-                        Box(Modifier.weight(1f)) {
+                    val wide = LocalConfiguration.current.screenWidthDp >= 600
+                    val labels = listOf(
+                        strings["navHome"] ?: tx(rtl, "Home", "خانه"),
+                        strings["navArrange"] ?: tx(rtl, "Arrange", "چیدمان"),
+                        strings["navDevices"] ?: tx(rtl, "Devices", "دستگاه‌ها"),
+                        strings["navTransfers"] ?: tx(rtl, "Transfers", "انتقال‌ها"),
+                        strings["settings"] ?: tx(rtl, "Settings", "تنظیمات")
+                    )
+                    val content: @Composable (Modifier) -> Unit = { mod ->
+                        Box(mod) {
                             AnimatedContent(tab, transitionSpec = {
                                 if (reduce) fadeIn(tween(0)) togetherWith fadeOut(tween(0))
                                 else fadeIn(tween(220)) togetherWith fadeOut(tween(160))
@@ -191,26 +207,42 @@ fun EdgeSpanApp(
                                         onChooseMethod, onPair, onRelay, onStun, onDirect, onRetry, onSwitch, onScan, { setup = true }, onPaste,
                                         handoffPc, onFlag, handoffNote
                                     )
-                                    1 -> Pair(strings, link, message, pairState, onScan, onPair)
+                                    1 -> ArrangePage(strings, rtl, labels[1], status, peers)
+                                    2 -> Pair(strings, link, message, pairState, onScan, onPair)
+                                    3 -> TransfersPage(strings, rtl, labels[3], clipboard, files, path, onFlag, onPaste)
                                     else -> Settings(strings, rtl, dark, relay, stun, diagnostics, edgeGlow, clipboard, files, handoffPc, breakthrough, reduceMotion, sound, onLanguage, onTheme, onRelay, onStun, onFlag, licenseCode, licenseDays, onExportLog)
                                 }
                             }
                         }
-                        Text(
-                            (strings["versionLabel"] ?: "Version") + " " + BuildConfig.VERSION_NAME,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-                            color = Muted(),
-                            fontSize = 11.sp
-                        )
-                        NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                            listOf(0 to (strings["navConnect"] ?: "Connect"), 1 to (strings["pairing"] ?: "Pair"), 2 to (strings["settings"] ?: "Settings")).forEach { (index, label) ->
-                                NavigationBarItem(
-                                    selected = tab == index,
-                                    onClick = { tab = index },
-                                    label = { Text(label) },
-                                    icon = { StrokeIcon(index, if (tab == index) MaterialTheme.colorScheme.primary else Muted()) },
-                                    colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
-                                )
+                    }
+                    if (wide) {
+                        Row(Modifier.fillMaxSize()) {
+                            NavigationRail(containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxHeight().padding(top = 12.dp)) {
+                                labels.forEachIndexed { index, label ->
+                                    NavigationRailItem(
+                                        selected = tab == index,
+                                        onClick = { tab = index },
+                                        label = { Text(label, fontSize = 12.sp) },
+                                        icon = { StrokeIcon(index, if (tab == index) MaterialTheme.colorScheme.primary else Muted()) },
+                                        colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+                                    )
+                                }
+                            }
+                            content(Modifier.weight(1f).fillMaxHeight())
+                        }
+                    } else {
+                        Column(Modifier.fillMaxSize()) {
+                            content(Modifier.weight(1f))
+                            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                                labels.forEachIndexed { index, label ->
+                                    NavigationBarItem(
+                                        selected = tab == index,
+                                        onClick = { tab = index },
+                                        label = { Text(label, fontSize = 11.sp, maxLines = 1) },
+                                        icon = { StrokeIcon(index, if (tab == index) MaterialTheme.colorScheme.primary else Muted()) },
+                                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+                                    )
+                                }
                             }
                         }
                     }
@@ -261,7 +293,10 @@ private fun Connect(
     var relay by remember { mutableStateOf(relay0) }
     var stun by remember { mutableStateOf(stun0) }
     var direct by remember { mutableStateOf(direct0) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (compact) 12.dp else 22.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 14.dp)) {
+    Debounced(relay, relay0, onRelay)
+    Debounced(stun, stun0, onStun)
+    Debounced(direct, direct0, onDirect)
+    PageColumn(if (compact) 8.dp else 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Mark()
             Column {
@@ -331,10 +366,10 @@ private fun Connect(
                 }
             }
             if (working && method == "relay") {
-                OutlinedTextField(relay, { relay = it; onRelay(it) }, label = { Text(strings["relayUrl"] ?: "Relay") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(stun, { stun = it; onStun(it) }, label = { Text(strings["stunServer"] ?: "STUN") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(relay, { relay = it }, label = { Text(strings["relayUrl"] ?: "Relay") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(stun, { stun = it }, label = { Text(strings["stunServer"] ?: "STUN") }, modifier = Modifier.fillMaxWidth())
                 Text(strings["stunHint"] ?: "", color = Muted())
-                OutlinedTextField(direct, { direct = it; onDirect(it) }, label = { Text(strings["directAddress"] ?: "PC") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(direct, { direct = it }, label = { Text(strings["directAddress"] ?: "PC") }, modifier = Modifier.fillMaxWidth())
                 Text(strings["directHint"] ?: "", color = Muted())
                 OutlinedTextField(pin, { pin = it }, label = { Text(strings["codeLabel"] ?: "PIN") }, modifier = Modifier.fillMaxWidth())
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -449,7 +484,7 @@ private fun Onboarding(strings: Map<String, String>, onDone: () -> Unit) {
     var index by remember { mutableIntStateOf(0) }
     val page = pages[index]
     val context = androidx.compose.ui.platform.LocalContext.current
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    PageColumn(16.dp) {
         Mark()
         Text(page.first, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         Text(page.second, color = Muted(), fontSize = 16.sp)
@@ -484,7 +519,7 @@ private fun Onboarding(strings: Map<String, String>, onDone: () -> Unit) {
 @Composable
 private fun Home(strings: Map<String, String>, name: String, backend: String, status: String, link: String, message: String, onStart: () -> Unit, onStop: () -> Unit, onSave: (String, String, String) -> Unit) {
     var mode by remember { mutableStateOf(backend) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    PageColumn {
         Text(strings["brandKicker"] ?: "ACROSS THE EDGE", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         Text(strings["home"] ?: "Home", style = MaterialTheme.typography.headlineMedium)
         Text(strings["tagline"] ?: "", color = Muted())
@@ -519,7 +554,7 @@ private fun Home(strings: Map<String, String>, name: String, backend: String, st
 @Composable
 private fun Pair(strings: Map<String, String>, link0: String, message: String, pairState: String, onScan: () -> Unit, onPair: (String) -> Unit) {
     var link by remember { mutableStateOf(link0) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    PageColumn {
         Text(strings["pairing"] ?: "Pairing", style = MaterialTheme.typography.headlineMedium)
         Text(strings["qrHint"] ?: "", color = Muted())
         if (message.isNotBlank()) {
@@ -534,41 +569,142 @@ private fun Pair(strings: Map<String, String>, link0: String, message: String, p
 
 @Composable
 private fun Settings(strings: Map<String, String>, rtl: Boolean, dark: Boolean, relay0: String, stun0: String, diagnostics: Boolean, edgeGlow: Boolean, clipboard: Boolean, files: Boolean, handoffPc: Boolean, breakthrough: Boolean, reduceMotion: Boolean, sound: Boolean, onLanguage: (String) -> Unit, onTheme: (Boolean) -> Unit, onRelay: (String) -> Unit, onStun: (String) -> Unit, onFlag: (String, Boolean) -> Unit, licenseCode: Int, licenseDays: Int, onExportLog: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(strings["settings"] ?: "Settings", style = MaterialTheme.typography.headlineMedium)
-        HandoffCard(strings, handoffPc, onFlag)
+    // Windows 11 style: no Save button. Switches/choices persist instantly (SharedPreferences.apply()),
+    // text fields persist after 500 ms without typing. A short "Saved" chip confirms each write.
+    var savedAt by remember { mutableLongStateOf(0L) }
+    val mark = { savedAt = System.currentTimeMillis() }
+    val flag: (String, Boolean) -> Unit = { k, v -> onFlag(k, v); mark() }
+    var relay by remember { mutableStateOf(relay0) }
+    var stun by remember { mutableStateOf(stun0) }
+    Debounced(relay, relay0) { onRelay(it); mark() }
+    Debounced(stun, stun0) { onStun(it); mark() }
+    val relayBad = relay.isNotBlank() && !(relay.startsWith("http://") || relay.startsWith("https://") || relay.startsWith("ws://") || relay.startsWith("wss://"))
+    PageColumn {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(strings["settings"] ?: tx(rtl, "Settings", "تنظیمات"), style = MaterialTheme.typography.headlineMedium, fontSize = 30.sp, modifier = Modifier.weight(1f))
+            SavedChip(savedAt, strings["savedChip"] ?: tx(rtl, "Saved", "ذخیره شد"))
+        }
+        Text(strings["autosaveHint"] ?: tx(rtl, "Changes are saved automatically.", "تغییرات به‌طور خودکار ذخیره می‌شوند."), color = Muted(), fontSize = 13.sp)
+        Section(tx(rtl, "General", "عمومی"))
+        Card {
+            Text(strings["languageLabel"] ?: "", color = Muted())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Choice(strings["english"] ?: "English", !rtl) { onLanguage("en"); mark() }
+                Choice(strings["persian"] ?: "فارسی", rtl) { onLanguage("fa"); mark() }
+            }
+            Text(strings["appearance"] ?: "", color = Muted())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Choice(strings["themeLight"] ?: "Light", !dark) { onTheme(false); mark() }
+                Choice(strings["themeDark"] ?: "Dark", dark) { onTheme(true); mark() }
+            }
+            Flag(strings["reduceMotion"] ?: "Reduce motion", reduceMotion) { flag("reduceMotion", it) }
+            Flag(strings["soundEnabled"] ?: "Sound", sound) { flag("sound", it) }
+            Text(strings["soundHint"] ?: "", color = Muted(), fontSize = 12.sp)
+        }
+        Section(tx(rtl, "Input", "ورودی"))
+        Card {
+            Flag(strings["edgeGlowPhone"] ?: "Glow", edgeGlow) { flag("edgeGlow", it) }
+            Flag(strings["breakthrough"] ?: "Breakthrough", breakthrough) { flag("breakthrough", it) }
+            Text(strings["imeNote"] ?: "", color = Muted(), fontSize = 12.sp)
+        }
+        Section(tx(rtl, "Clipboard & files", "کلیپ‌بورد و فایل‌ها"))
+        Card {
+            Flag(strings["clipboardShare"] ?: "Clipboard", clipboard) { flag("clipboard", it) }
+            Flag(strings["fileTransfer"] ?: "Files", files) { flag("files", it) }
+            Flag(strings["handoffPc"] ?: "PC windows on the tablet", handoffPc) { flag("handoffPc", it) }
+            Text(strings["handoffPcHint"] ?: "", color = Muted(), fontSize = 12.sp)
+        }
+        Section(tx(rtl, "Connection", "اتصال"))
+        Card {
+            Text(strings["relayHint"] ?: "", color = Muted(), fontSize = 12.sp)
+            OutlinedTextField(relay, { relay = it }, label = { Text(strings["relayUrl"] ?: "Relay") }, modifier = Modifier.fillMaxWidth(), singleLine = true, isError = relayBad,
+                supportingText = { if (relayBad) Text(tx(rtl, "Use an http(s):// or ws(s):// address.", "از نشانی http(s):// یا ws(s):// استفاده کنید.")) })
+            Text(tx(rtl, "Advanced", "پیشرفته"), fontWeight = FontWeight.SemiBold)
+            Text(strings["stunHint"] ?: "", color = Muted(), fontSize = 12.sp)
+            OutlinedTextField(stun, { stun = it }, label = { Text(strings["stunServer"] ?: "STUN") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        }
+        Section(tx(rtl, "Privacy & security", "حریم خصوصی و امنیت"))
+        Card {
+            Flag(strings["diagnostics"] ?: "Diagnostics", diagnostics) { flag("diagnostics", it) }
+            Text(strings["diagnosticsHint"] ?: "", color = Muted(), fontSize = 12.sp)
+            Text(strings["privacyNote"] ?: "", color = Muted(), fontSize = 12.sp)
+        }
+        Section(strings["about"] ?: tx(rtl, "About", "درباره"))
         AboutBlock(strings, licenseCode, licenseDays, onExportLog)
-        Text(strings["languageLabel"] ?: "", color = Muted())
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice(strings["english"] ?: "English", !rtl) { onLanguage("en") }
-            Choice(strings["persian"] ?: "فارسی", rtl) { onLanguage("fa") }
-        }
-        Text(strings["appearance"] ?: "", color = Muted())
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice(strings["themeDark"] ?: "Dark", dark) { onTheme(true) }
-            Choice(strings["themeLight"] ?: "Light", !dark) { onTheme(false) }
-        }
-        var relay by remember { mutableStateOf(relay0) }
-        var stun by remember { mutableStateOf(stun0) }
-        Text(strings["relayHint"] ?: "", color = Muted())
-        OutlinedTextField(relay, { relay = it; onRelay(it) }, label = { Text(strings["relayUrl"] ?: "Relay") }, modifier = Modifier.fillMaxWidth())
-        Text(strings["stunHint"] ?: "", color = Muted())
-        OutlinedTextField(stun, { stun = it; onStun(it) }, label = { Text(strings["stunServer"] ?: "STUN") }, modifier = Modifier.fillMaxWidth())
-        Flag(strings["clipboardShare"] ?: "Clipboard", clipboard) { onFlag("clipboard", it) }
-        Flag(strings["fileTransfer"] ?: "Files", files) { onFlag("files", it) }
-        Flag(strings["edgeGlowPhone"] ?: "Glow", edgeGlow) { onFlag("edgeGlow", it) }
-        Flag(strings["breakthrough"] ?: "Breakthrough", breakthrough) { onFlag("breakthrough", it) }
-        Flag(strings["reduceMotion"] ?: "Reduce motion", reduceMotion) { onFlag("reduceMotion", it) }
-        Flag(strings["soundEnabled"] ?: "Sound", sound) { onFlag("sound", it) }
-        Text(strings["soundHint"] ?: "", color = Muted(), fontSize = 12.sp)
-        Flag(strings["diagnostics"] ?: "Diagnostics", diagnostics) { onFlag("diagnostics", it) }
-        Text(strings["diagnosticsHint"] ?: "", color = Muted())
-        Text(strings["diagPathHint"] ?: "", color = Muted())
-        EOutlined(onClick = onExportLog) { Text(strings["diagExport"] ?: "Export diagnostics log") }
-        Text(strings["imeNote"] ?: "", color = Muted())
-        Text(strings["eulaShort"] ?: "", color = Muted())
     }
 }
+
+@Composable
+private fun ArrangePage(strings: Map<String, String>, rtl: Boolean, title: String, status: String, peers: String) {
+    PageColumn {
+        Text(title, style = MaterialTheme.typography.headlineMedium, fontSize = 30.sp)
+        Card {
+            Canvas(Modifier.fillMaxWidth().height(160.dp)) {
+                val w = size.width; val h = size.height
+                drawRoundRect(Color(0x223B6CFF), Offset(w * 0.12f, h * 0.18f), Size(w * 0.46f, h * 0.64f), CornerRadius(12f, 12f))
+                drawRoundRect(Blue, Offset(w * 0.12f, h * 0.18f), Size(w * 0.46f, h * 0.64f), CornerRadius(12f, 12f), style = Stroke(2f * density))
+                drawRoundRect(Mint, Offset(w * 0.60f, h * 0.30f), Size(w * 0.20f, h * 0.40f), CornerRadius(10f, 10f))
+                drawLine(Mint, Offset(w * 0.58f, h * 0.30f), Offset(w * 0.58f, h * 0.70f), strokeWidth = 3f * density, cap = StrokeCap.Round)
+            }
+            Text(tx(rtl, "Your tablet sits next to the PC's monitors. Drag it to any edge of any monitor in EdgeSpan on Windows → Arrange; the layout is saved there per monitor setup.",
+                "تبلت کنار مانیتورهای رایانه قرار می‌گیرد. در EdgeSpan روی ویندوز ← چیدمان، آن را به هر لبهٔ هر مانیتور بکشید؛ چیدمان برای هر پیکربندی مانیتور ذخیره می‌شود."), color = Muted())
+            Text(if (status == "has") strings["hasControl"] ?: "" else strings["waitingForHost"] ?: "", fontWeight = FontWeight.SemiBold)
+            if (peers.isNotBlank()) Text(peers, color = Muted(), fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun TransfersPage(strings: Map<String, String>, rtl: Boolean, title: String, clipboard: Boolean, files: Boolean, path: String, onFlag: (String, Boolean) -> Unit, onPaste: () -> Unit) {
+    PageColumn {
+        Text(title, style = MaterialTheme.typography.headlineMedium, fontSize = 30.sp)
+        Card {
+            Flag(strings["clipboardShare"] ?: "Clipboard", clipboard) { onFlag("clipboard", it) }
+            Flag(strings["fileTransfer"] ?: "Files", files) { onFlag("files", it) }
+            EOutlined(onClick = onPaste) { Text(strings["pasteFromPc"] ?: tx(rtl, "Paste from PC", "چسباندن از رایانه")) }
+        }
+        Card {
+            Text(tx(rtl, "Received files", "فایل‌های دریافتی"), fontWeight = FontWeight.SemiBold)
+            Text(tx(rtl, "Files sent from the PC are saved to Downloads/EdgeSpan.", "فایل‌های ارسالی از رایانه در Downloads/EdgeSpan ذخیره می‌شوند."), color = Muted())
+            if (path.isNotBlank()) Text(path, color = Muted(), fontSize = 12.sp)
+        }
+    }
+}
+
+/** Scrollable page: centred, max 960 dp wide, 24–36 dp side margins, 48 dp bottom padding so the last card is never under the nav bar. */
+@Composable
+private fun PageColumn(gap: androidx.compose.ui.unit.Dp = 14.dp, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val side = if (LocalConfiguration.current.screenWidthDp >= 840) 36.dp else 24.dp
+    Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = 960.dp).fillMaxWidth().padding(start = side, end = side, top = 20.dp, bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(gap), content = content)
+    }
+}
+
+@Composable
+private fun Debounced(value: String, initial: String, save: (String) -> Unit) {
+    LaunchedEffect(value) {
+        if (value == initial) return@LaunchedEffect
+        delay(500)
+        save(value.trim())
+    }
+}
+
+@Composable
+private fun SavedChip(at: Long, label: String) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(at) { if (at > 0) { visible = true; delay(1800); visible = false } }
+    val a by animateFloatAsState(if (visible) 1f else 0f, tween(if (LocalReduce.current) 0 else 180), label = "saved")
+    Box(Modifier.graphicsLayer { alpha = a }.clip(RoundedCornerShape(12.dp)).background(Mint.copy(alpha = 0.16f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+        Text("✓ $label", color = Mint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun Section(title: String) {
+    Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
+}
+
+private fun tx(rtl: Boolean, en: String, fa: String) = if (rtl) fa else en
 
 @Composable
 private fun HandoffCard(strings: Map<String, String>, on: Boolean, onFlag: (String, Boolean) -> Unit) {
@@ -668,7 +804,17 @@ private fun StrokeIcon(kind: Int, tint: Color) {
                 drawCircle(tint, 3.2f * density, Offset(size.width - 5f * density, size.height / 2f), style = stroke)
                 drawLine(tint, Offset(8.5f * density, size.height / 2f), Offset(size.width - 8.5f * density, size.height / 2f), strokeWidth = stroke.width, cap = StrokeCap.Round)
             }
-            1 -> drawRoundRect(tint, Offset(4f * density, 4f * density), Size(size.width - 8f * density, size.height - 8f * density), CornerRadius(3f * density, 3f * density), style = stroke)
+            1 -> {
+                drawRoundRect(tint, Offset(2f * density, 5f * density), Size(size.width * 0.55f, size.height - 10f * density), CornerRadius(2f * density, 2f * density), style = stroke)
+                drawRoundRect(tint, Offset(size.width * 0.68f, 7f * density), Size(size.width * 0.28f, size.height - 14f * density), CornerRadius(2f * density, 2f * density), style = stroke)
+            }
+            2 -> drawRoundRect(tint, Offset(6f * density, 3f * density), Size(size.width - 12f * density, size.height - 6f * density), CornerRadius(3f * density, 3f * density), style = stroke)
+            3 -> {
+                drawLine(tint, Offset(4f * density, 8f * density), Offset(size.width - 4f * density, 8f * density), strokeWidth = stroke.width, cap = StrokeCap.Round)
+                drawLine(tint, Offset(size.width - 8f * density, 4f * density), Offset(size.width - 4f * density, 8f * density), strokeWidth = stroke.width, cap = StrokeCap.Round)
+                drawLine(tint, Offset(4f * density, size.height - 8f * density), Offset(size.width - 4f * density, size.height - 8f * density), strokeWidth = stroke.width, cap = StrokeCap.Round)
+                drawLine(tint, Offset(8f * density, size.height - 4f * density), Offset(4f * density, size.height - 8f * density), strokeWidth = stroke.width, cap = StrokeCap.Round)
+            }
             else -> {
                 drawLine(tint, Offset(4f * density, 7f * density), Offset(size.width - 4f * density, 7f * density), strokeWidth = stroke.width, cap = StrokeCap.Round)
                 drawLine(tint, Offset(4f * density, size.height / 2f), Offset(size.width - 4f * density, size.height / 2f), strokeWidth = stroke.width, cap = StrokeCap.Round)
