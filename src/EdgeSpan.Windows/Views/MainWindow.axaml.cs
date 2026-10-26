@@ -88,9 +88,14 @@ public sealed partial class MainWindow : Window
         var rtl = Catalog.IsRtl(_model.Host.Settings.Language);
         var jakarta = "avares://EdgeSpan/Assets/Fonts/PlusJakartaSans-Regular.ttf#Plus Jakarta Sans";
         var vazir = "avares://EdgeSpan/Assets/Fonts/Vazirmatn-Regular.ttf#Vazirmatn";
-        FontFamily = new FontFamily(rtl ? $"{vazir}, {jakarta}, Inter" : $"{jakarta}, {vazir}, Inter");
+        // Windows 11 type ramp: Segoe UI Variable (system font), Vazirmatn for Persian.
+        FontFamily = new FontFamily(rtl
+            ? $"{vazir}, Segoe UI Variable Text, Segoe UI, {jakarta}"
+            : $"Segoe UI Variable Text, Segoe UI, {jakarta}, {vazir}, Inter");
         if (Application.Current != null)
-            Application.Current.RequestedThemeVariant = _model.IsDark ? ThemeVariant.Dark : ThemeVariant.Light;
+            Application.Current.RequestedThemeVariant = _model.FollowSystemTheme
+                ? ThemeVariant.Default
+                : _model.IsDark ? ThemeVariant.Dark : ThemeVariant.Light;
         Title = "EdgeSpan";
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
         {
@@ -154,7 +159,7 @@ public sealed partial class MainWindow : Window
     private void ApplyWidth(double width)
     {
         var narrow = width < 860;
-        RootGrid.ColumnDefinitions[0].Width = new GridLength(narrow ? 0 : 248);
+        RootGrid.ColumnDefinitions[0].Width = new GridLength(narrow ? 0 : 292);
         SideNav.IsVisible = !narrow;
         TopNav.IsVisible = narrow;
     }

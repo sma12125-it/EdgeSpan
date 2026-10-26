@@ -9,431 +9,996 @@
         Foreground="{DynamicResource InkBrush}"
         WindowStartupLocation="CenterScreen"
         Cursor="Arrow">
+  <!-- Windows 11 Settings layout: nav pane (header card, search, icon items with accent pill) + page with large title and setting cards. -->
   <Grid x:Name="RootGrid">
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="248"/>
+      <ColumnDefinition Width="292"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
-    <Border x:Name="SideNav" Background="{DynamicResource SideBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0" Padding="16,20">
+    <Border x:Name="SideNav" Background="{DynamicResource SideBrush}" Padding="12,16,8,16">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="4,0,4,22">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <Image Source="/Assets/icon.png" Width="36" Height="36"/>
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Text="EdgeSpan" FontSize="18" FontWeight="SemiBold"/>
-              <TextBlock Text="{Binding VersionShort}" Classes="muted" FontSize="11"/>
+        <StackPanel DockPanel.Dock="Top" Spacing="14" Margin="4,0,4,14">
+          <TextBlock Text="EdgeSpan" FontSize="12" Margin="4,0,0,4"/>
+          <Grid ColumnDefinitions="Auto,*">
+            <Border Width="64" Height="64" CornerRadius="32" ClipToBounds="True" Background="{DynamicResource CardSolidBrush}">
+              <Image Source="/Assets/icon.png" Width="48" Height="48"/>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0" Spacing="2">
+              <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource MintBrush}" IsVisible="{Binding ShowConnectedView}" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding StatusText}" Classes="desc" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" MaxWidth="170"/>
+              </StackPanel>
+              <TextBlock Text="{Binding VersionShort}" Classes="desc"/>
             </StackPanel>
-          </StackPanel>
+          </Grid>
+          <Grid>
+            <TextBox Classes="search" Text="{Binding SearchText}" Watermark="{Binding Ui[findSetting]}" Padding="10,7,34,6"/>
+            <Path Classes="icon" Data="M 7,1 A 6,6 0 1 1 6.99,1 M 11.5,11.5 L 17,17" Width="13" Height="13" HorizontalAlignment="Right" Margin="0,0,12,0" IsHitTestVisible="False"/>
+          </Grid>
         </StackPanel>
-        <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,18,0,0">
-          <TextBlock Text="{Binding LanguageLabel}" Classes="muted" FontSize="12"/>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="ghost" Content="{Binding EnglishLabel}" Command="{Binding EnglishCommand}"/>
-            <Button Classes="ghost" Content="{Binding PersianLabel}" Command="{Binding PersianCommand}"/>
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="ghost" Content="{Binding DarkLabel}" Command="{Binding DarkCommand}"/>
-            <Button Classes="ghost" Content="{Binding LightLabel}" Command="{Binding LightCommand}"/>
-          </StackPanel>
-        </StackPanel>
-        <StackPanel Spacing="4">
-          <Button Classes="nav" Classes.selected="{Binding ConnectSelected}" Content="{Binding NavConnect}" Command="{Binding ShowConnectCommand}"/>
-          <Button Classes="nav" Classes.selected="{Binding OverviewSelected}" Content="{Binding NavOverview}" Command="{Binding ShowOverviewCommand}"/>
-          <Button Classes="nav" Classes.selected="{Binding DevicesSelected}" Content="{Binding NavDevices}" Command="{Binding ShowDevicesCommand}"/>
-          <Button Classes="nav" Classes.selected="{Binding LayoutSelected}" Content="{Binding NavLayout}" Command="{Binding ShowLayoutCommand}"/>
-          <Button Classes="nav" Classes.selected="{Binding NetworkSelected}" Content="{Binding NavNetwork}" Command="{Binding ShowNetworkCommand}"/>
-          <Button Classes="nav" Classes.selected="{Binding PairingSelected}" Content="{Binding NavPairing}" Command="{Binding ShowPairingCommand}"/>
-          <Button Classes="nav" Classes.selected="{Binding LicenseSelected}" Content="{Binding NavLicense}" Command="{Binding ShowLicenseCommand}"/>
-          <Button Classes="nav" Classes.selected="{Binding AboutSelected}" Content="{Binding NavAbout}" Command="{Binding ShowAboutCommand}"/>
+        <StackPanel Spacing="3">
+          <Button Classes="nav" Classes.selected="{Binding HomeSelected}" Command="{Binding ShowHomeCommand}">
+            <Grid ColumnDefinitions="3,40,*">
+              <Border Classes="pill"/>
+              <ContentControl Grid.Column="1" HorizontalAlignment="Center"><Path Classes="icon" Data="M 2,8 L 9,2 L 16,8 M 4,7 L 4,16 L 14,16 L 14,7 M 7.5,16 L 7.5,11 L 10.5,11 L 10.5,16"/></ContentControl>
+              <TextBlock Grid.Column="2" Text="{Binding Ui[navHome]}" VerticalAlignment="Center"/>
+            </Grid>
+          </Button>
+          <Button Classes="nav" Classes.selected="{Binding ArrangeSelected}" Command="{Binding ShowArrangeCommand}">
+            <Grid ColumnDefinitions="3,40,*">
+              <Border Classes="pill"/>
+              <ContentControl Grid.Column="1" HorizontalAlignment="Center"><Path Classes="icon" Data="M 1,3 L 11,3 L 11,10 L 1,10 Z M 4,13 L 8,13 M 6,10 L 6,13 M 13,6 L 17,6 L 17,14 L 13,14 Z"/></ContentControl>
+              <TextBlock Grid.Column="2" Text="{Binding Ui[navArrange]}" VerticalAlignment="Center"/>
+            </Grid>
+          </Button>
+          <Button Classes="nav" Classes.selected="{Binding DevicesNavSelected}" Command="{Binding ShowDevicesCommand}">
+            <Grid ColumnDefinitions="3,40,*">
+              <Border Classes="pill"/>
+              <ContentControl Grid.Column="1" HorizontalAlignment="Center"><Path Classes="icon" Data="M 4,1 L 14,1 L 14,17 L 4,17 Z M 8,14.5 L 10,14.5"/></ContentControl>
+              <TextBlock Grid.Column="2" Text="{Binding Ui[navDevicesW]}" VerticalAlignment="Center"/>
+            </Grid>
+          </Button>
+          <Button Classes="nav" Classes.selected="{Binding TransfersSelected}" Command="{Binding ShowTransfersCommand}">
+            <Grid ColumnDefinitions="3,40,*">
+              <Border Classes="pill"/>
+              <ContentControl Grid.Column="1" HorizontalAlignment="Center"><Path Classes="icon" Data="M 2,6 L 15,6 M 11,2 L 15,6 L 11,10 M 16,12 L 3,12 M 7,8 L 3,12 L 7,16"/></ContentControl>
+              <TextBlock Grid.Column="2" Text="{Binding Ui[navTransfers]}" VerticalAlignment="Center"/>
+            </Grid>
+          </Button>
+          <Button Classes="nav" Classes.selected="{Binding SettingsSelected}" Command="{Binding ShowSettingsCommand}">
+            <Grid ColumnDefinitions="3,40,*">
+              <Border Classes="pill"/>
+              <ContentControl Grid.Column="1" HorizontalAlignment="Center"><Path Classes="icon" Data="M 9,6 A 3,3 0 1 1 8.99,6 M 9,1 L 9,3 M 9,15 L 9,17 M 1,9 L 3,9 M 15,9 L 17,9 M 3.3,3.3 L 4.7,4.7 M 13.3,13.3 L 14.7,14.7 M 3.3,14.7 L 4.7,13.3 M 13.3,4.7 L 14.7,3.3"/></ContentControl>
+              <TextBlock Grid.Column="2" Text="{Binding Ui[navSettings]}" VerticalAlignment="Center"/>
+            </Grid>
+          </Button>
         </StackPanel>
       </DockPanel>
     </Border>
     <Grid Grid.Column="1">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
-      <Border x:Name="TopNav" IsVisible="False" Background="{DynamicResource SideBrush}" Padding="10" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
+      <Border x:Name="TopNav" IsVisible="False" Padding="10">
         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <Button Classes="nav" Classes.selected="{Binding ConnectSelected}" Content="{Binding NavConnect}" Command="{Binding ShowConnectCommand}"/>
-            <Button Classes="nav" Classes.selected="{Binding OverviewSelected}" Content="{Binding NavOverview}" Command="{Binding ShowOverviewCommand}"/>
-            <Button Classes="nav" Classes.selected="{Binding DevicesSelected}" Content="{Binding NavDevices}" Command="{Binding ShowDevicesCommand}"/>
-            <Button Classes="nav" Classes.selected="{Binding LayoutSelected}" Content="{Binding NavLayout}" Command="{Binding ShowLayoutCommand}"/>
-            <Button Classes="nav" Classes.selected="{Binding NetworkSelected}" Content="{Binding NavNetwork}" Command="{Binding ShowNetworkCommand}"/>
-            <Button Classes="nav" Classes.selected="{Binding PairingSelected}" Content="{Binding NavPairing}" Command="{Binding ShowPairingCommand}"/>
-            <Button Classes="nav" Classes.selected="{Binding AboutSelected}" Content="{Binding NavAbout}" Command="{Binding ShowAboutCommand}"/>
+            <Button Classes="ghost" Classes.selected="{Binding HomeSelected}" Content="{Binding Ui[navHome]}" Command="{Binding ShowHomeCommand}"/>
+            <Button Classes="ghost" Classes.selected="{Binding ArrangeSelected}" Content="{Binding Ui[navArrange]}" Command="{Binding ShowArrangeCommand}"/>
+            <Button Classes="ghost" Classes.selected="{Binding DevicesNavSelected}" Content="{Binding Ui[navDevicesW]}" Command="{Binding ShowDevicesCommand}"/>
+            <Button Classes="ghost" Classes.selected="{Binding TransfersSelected}" Content="{Binding Ui[navTransfers]}" Command="{Binding ShowTransfersCommand}"/>
+            <Button Classes="ghost" Classes.selected="{Binding SettingsSelected}" Content="{Binding Ui[navSettings]}" Command="{Binding ShowSettingsCommand}"/>
           </StackPanel>
         </ScrollViewer>
       </Border>
-      <ScrollViewer x:Name="Pages" Grid.Row="1" Padding="28,24">
-        <StackPanel Spacing="18" MaxWidth="920">
-          <StackPanel IsVisible="{Binding ShowConnect}" Spacing="16">
-            <TextBlock Text="{Binding BrandKicker}" Classes="kicker"/>
-            <TextBlock Classes="h1" Text="{Binding ConnectTitle}"/>
-            <TextBlock Text="{Binding ConnectLead}" Classes="muted" FontSize="15"/>
-            <StackPanel Spacing="12" IsVisible="{Binding ShowMethodCards}">
+      <TextBlock Grid.Row="1" Classes="h1" Text="{Binding PageTitle}" Margin="40,22,40,14" MaxWidth="1000" HorizontalAlignment="Stretch"/>
+      <ScrollViewer x:Name="Pages" Grid.Row="2" Padding="40,0,40,28">
+        <StackPanel Spacing="0" MaxWidth="1000">
+
+          <!-- HOME: connect flow + live status -->
+          <StackPanel IsVisible="{Binding ShowHome}" Spacing="0">
+            <StackPanel IsVisible="{Binding ShowConnect}" Spacing="3">
+              <Border Classes="card" Padding="20" Margin="0,0,0,8">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="{Binding BrandKicker}" Classes="kicker"/>
+                  <TextBlock Text="{Binding ConnectTitle}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                  <TextBlock Text="{Binding ConnectLead}" Classes="desc" FontSize="13"/>
+                </StackPanel>
+              </Border>
+              <StackPanel Spacing="3" IsVisible="{Binding ShowMethodCards}">
               <Button Classes="method" Command="{Binding ChooseUsbCommand}">
-                <Grid ColumnDefinitions="180,*">
-                  <c:LinkSketch Method="usb" Phase="idle" Height="108" IsHitTestVisible="False"/>
-                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0" Spacing="4">
-                    <TextBlock Text="{Binding UsbTitle}" FontSize="18" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding UsbBody}" Classes="muted"/>
+                <Grid ColumnDefinitions="150,*,Auto">
+                  <c:LinkSketch Method="usb" Phase="idle" Height="84" IsHitTestVisible="False"/>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" Spacing="2">
+                    <TextBlock Classes="title" Text="{Binding UsbTitle}" FontWeight="SemiBold"/>
+                    <TextBlock Classes="desc" Text="{Binding UsbBody}"/>
                   </StackPanel>
+                  <Path Grid.Column="2" Classes="icon" Data="M 6,3 L 12,9 L 6,15" Width="12" Height="12"/>
                 </Grid>
               </Button>
               <Button Classes="method" Command="{Binding ChooseLanCommand}">
-                <Grid ColumnDefinitions="180,*">
-                  <c:LinkSketch Method="lan" Phase="idle" Height="108" IsHitTestVisible="False"/>
-                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0" Spacing="4">
-                    <TextBlock Text="{Binding LanTitle}" FontSize="18" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding LanBody}" Classes="muted"/>
+                <Grid ColumnDefinitions="150,*,Auto">
+                  <c:LinkSketch Method="lan" Phase="idle" Height="84" IsHitTestVisible="False"/>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" Spacing="2">
+                    <TextBlock Classes="title" Text="{Binding LanTitle}" FontWeight="SemiBold"/>
+                    <TextBlock Classes="desc" Text="{Binding LanBody}"/>
                   </StackPanel>
+                  <Path Grid.Column="2" Classes="icon" Data="M 6,3 L 12,9 L 6,15" Width="12" Height="12"/>
                 </Grid>
               </Button>
               <Button Classes="method" Command="{Binding ChooseRelayCommand}">
-                <Grid ColumnDefinitions="180,*">
-                  <c:LinkSketch Method="relay" Phase="idle" Height="108" IsHitTestVisible="False"/>
-                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0" Spacing="4">
-                    <TextBlock Text="{Binding RelayTitle}" FontSize="18" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding RelayBody}" Classes="muted"/>
+                <Grid ColumnDefinitions="150,*,Auto">
+                  <c:LinkSketch Method="relay" Phase="idle" Height="84" IsHitTestVisible="False"/>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" Spacing="2">
+                    <TextBlock Classes="title" Text="{Binding RelayTitle}" FontWeight="SemiBold"/>
+                    <TextBlock Classes="desc" Text="{Binding RelayBody}"/>
                   </StackPanel>
+                  <Path Grid.Column="2" Classes="icon" Data="M 6,3 L 12,9 L 6,15" Width="12" Height="12"/>
                 </Grid>
               </Button>
-            </StackPanel>
-            <StackPanel Spacing="12" IsVisible="{Binding ShowConnectWork}">
-              <Border Classes="card" Height="240" Padding="8">
-                <c:LinkSketch Method="{Binding ActiveMethod}" Phase="{Binding ConnectPhase}"/>
-              </Border>
-              <TextBlock Text="{Binding ConnectStatus}" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap"/>
-              <TextBlock Text="{Binding ConnectDetail}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding HasConnectDetail}"/>
-              <TextBlock Text="{Binding SamsungHint}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowRetry}"/>
-              <Button Classes="ghost" Content="{Binding OpenSamsungLabel}" Command="{Binding OpenSamsungCommand}" HorizontalAlignment="Left" IsVisible="{Binding ShowRetry}"/>
-              <StackPanel Spacing="8" IsVisible="{Binding ShowLanTools}">
-                <TextBlock Text="{Binding PinLabel}" Classes="muted"/>
-                <TextBlock Text="{Binding PinText}" FontSize="40" FontWeight="SemiBold" Foreground="#174A8B" IsVisible="{Binding PairingVisible}"/>
-                <Image Source="{Binding QrImage}" Width="180" Height="180" HorizontalAlignment="Left" IsVisible="{Binding PairingVisible}"/>
-                <TextBlock Text="{Binding DiscoveredLabel}" FontWeight="SemiBold"/>
-                <ItemsControl ItemsSource="{Binding Peers}">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <TextBlock Text="{Binding Detail}" Classes="muted"/>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
               </StackPanel>
-              <StackPanel Spacing="8" IsVisible="{Binding ShowRelayTools}">
-                <TextBlock Text="{Binding RelayLabel}"/>
-                <TextBox Text="{Binding RelayUrl, Mode=TwoWay}"/>
-                <TextBlock Text="{Binding StunLabel}"/>
-                <Grid ColumnDefinitions="*,120">
-                  <TextBox Text="{Binding StunHost, Mode=TwoWay}" Watermark="{Binding StunHint}" Margin="0,0,8,0"/>
-                  <NumericUpDown Grid.Column="1" Value="{Binding StunPort}" Minimum="1" Maximum="65535"/>
-                </Grid>
-                <TextBlock Text="{Binding PublicHostLabel}"/>
-                <Grid ColumnDefinitions="*,120">
-                  <TextBox Text="{Binding PublicHost, Mode=TwoWay}" Watermark="203.0.113.10" Margin="0,0,8,0"/>
-                  <NumericUpDown Grid.Column="1" Value="{Binding PublicPort}" Minimum="0" Maximum="65535"/>
-                </Grid>
-                <TextBlock Text="{Binding PublicHostHint}" Classes="muted" TextWrapping="Wrap"/>
-                <TextBlock Text="{Binding PinText}" FontSize="40" FontWeight="SemiBold" Foreground="#174A8B" IsVisible="{Binding PairingVisible}"/>
-                <Image Source="{Binding QrImage}" Width="180" Height="180" HorizontalAlignment="Left" IsVisible="{Binding PairingVisible}"/>
-                <Button Classes="primary" Content="{Binding SaveLabel}" Command="{Binding ChooseRelayCommand}" HorizontalAlignment="Left"/>
-              </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Classes="primary" Content="{Binding RetryLabel}" Command="{Binding RetryConnectCommand}" IsVisible="{Binding ShowRetry}"/>
-                <Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}"/>
-              </StackPanel>
-            </StackPanel>
-            <StackPanel Spacing="12" IsVisible="{Binding ShowConnectedView}">
-              <Border Classes="card" Height="260" Padding="8">
-                <c:LinkSketch Method="{Binding ActiveMethod}" Phase="connected"/>
-              </Border>
-              <TextBlock Text="{Binding ConnectedTitle}" FontSize="26" FontWeight="SemiBold"/>
-              <UniformGrid Columns="2">
-                <Border Classes="card" Margin="0,0,8,0">
-                  <StackPanel Spacing="4">
-                    <TextBlock Text="{Binding LatencyLabel}" Classes="muted"/>
-                    <TextBlock Text="{Binding RttText}" FontSize="28" FontWeight="SemiBold"/>
+              <StackPanel Spacing="8" IsVisible="{Binding ShowConnectWork}">
+                <Border Classes="card" Height="220" Padding="8">
+                  <c:LinkSketch Method="{Binding ActiveMethod}" Phase="{Binding ConnectPhase}"/>
+                </Border>
+                <Border Classes="card">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding ConnectStatus}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding ConnectDetail}" Classes="desc" IsVisible="{Binding HasConnectDetail}"/>
+                    <TextBlock Text="{Binding SamsungHint}" Classes="desc" IsVisible="{Binding ShowRetry}"/>
+                    <Button Classes="ghost" Content="{Binding OpenSamsungLabel}" Command="{Binding OpenSamsungCommand}" HorizontalAlignment="Left" IsVisible="{Binding ShowRetry}"/>
+                    <StackPanel Spacing="8" IsVisible="{Binding ShowLanTools}">
+                      <TextBlock Text="{Binding PinLabel}" Classes="desc"/>
+                      <TextBlock Text="{Binding PinText}" FontSize="40" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" IsVisible="{Binding PairingVisible}"/>
+                      <Image Source="{Binding QrImage}" Width="180" Height="180" HorizontalAlignment="Left" IsVisible="{Binding PairingVisible}"/>
+                      <TextBlock Text="{Binding DiscoveredLabel}" FontWeight="SemiBold"/>
+                      <ItemsControl ItemsSource="{Binding Peers}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate><TextBlock Text="{Binding Detail}" Classes="desc"/></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                    <StackPanel Spacing="8" IsVisible="{Binding ShowRelayTools}">
+                      <TextBlock Text="{Binding RelayLabel}"/>
+                      <TextBox Text="{Binding RelayUrl, Mode=TwoWay}"/>
+                      <TextBlock Text="{Binding StunLabel}"/>
+                      <Grid ColumnDefinitions="*,120">
+                        <TextBox Text="{Binding StunHost, Mode=TwoWay}" Watermark="{Binding StunHint}" Margin="0,0,8,0"/>
+                        <NumericUpDown Grid.Column="1" Value="{Binding StunPort}" Minimum="1" Maximum="65535"/>
+                      </Grid>
+                      <TextBlock Text="{Binding PublicHostLabel}"/>
+                      <Grid ColumnDefinitions="*,120">
+                        <TextBox Text="{Binding PublicHost, Mode=TwoWay}" Watermark="203.0.113.10" Margin="0,0,8,0"/>
+                        <NumericUpDown Grid.Column="1" Value="{Binding PublicPort}" Minimum="0" Maximum="65535"/>
+                      </Grid>
+                      <TextBlock Text="{Binding PublicHostHint}" Classes="desc"/>
+                      <TextBlock Text="{Binding PinText}" FontSize="40" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" IsVisible="{Binding PairingVisible}"/>
+                      <Image Source="{Binding QrImage}" Width="180" Height="180" HorizontalAlignment="Left" IsVisible="{Binding PairingVisible}"/>
+                      <Button Classes="primary" Content="{Binding SaveLabel}" Command="{Binding ChooseRelayCommand}" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Classes="primary" Content="{Binding RetryLabel}" Command="{Binding RetryConnectCommand}" IsVisible="{Binding ShowRetry}"/>
+                      <Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}"/>
+                    </StackPanel>
                   </StackPanel>
                 </Border>
-                <Border Classes="card" Margin="8,0,0,0">
-                  <StackPanel Spacing="4">
-                    <TextBlock Text="{Binding TypeLabel}" Classes="muted"/>
-                    <TextBlock Text="{Binding ConnectKind}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource MintBrush}"/>
-                  </StackPanel>
+              </StackPanel>
+              <StackPanel Spacing="3" IsVisible="{Binding ShowConnectedView}">
+                <Border Classes="card" Padding="8" Height="230" Margin="0,0,0,5">
+                  <c:LinkSketch Method="{Binding ActiveMethod}" Phase="connected"/>
                 </Border>
-              </UniformGrid>
-              <Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}" HorizontalAlignment="Left"/>
+                <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 6,1 L 12,1 L 12,7 L 6,7 Z M 4,7 L 14,7 L 14,13 L 4,13 Z M 9,13 L 9,17"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding ConnectedTitle}"/>
+        <TextBlock Classes="desc" Text="{Binding LatencyLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBlock Text="{Binding RttText}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/><Border Background="{DynamicResource MintBrush}" CornerRadius="10" Padding="10,3" VerticalAlignment="Center"><TextBlock Text="{Binding ConnectKind}" Foreground="White" FontWeight="SemiBold"/></Border><Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+              </StackPanel>
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding ShowOverview}">
+              <TextBlock Classes="section" Text="{Binding Ui[statusSection]}"/>
+              <Border Classes="card" Margin="0,0,0,3">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Border Width="10" Height="10" CornerRadius="5" Background="{DynamicResource MintBrush}" VerticalAlignment="Top" Margin="2,9,14,0"/>
+                  <StackPanel Grid.Column="1" Spacing="4">
+                    <TextBlock Text="{Binding StatusText}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding ListenText}" Classes="desc"/>
+                    <TextBlock Text="{Binding LicenseText}" Foreground="{DynamicResource GoldBrush}" FontSize="12"/>
+                    <TextBlock Text="{Binding SwitchShortcutLine}" FontSize="12" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding InputTraceLine}" FontSize="12" Foreground="{DynamicResource AccentBrush}"/>
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 5,6 0 0 1 14,7 L 14,11 A 5,6 0 0 1 4,11 L 4,7 A 5,6 0 0 1 9,1 Z M 9,1 L 9,6"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding ActiveText}"/>
+        <TextBlock Classes="desc" Text="{Binding LockText}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+              <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 8,8 0 1 1 8.99,1 M 1,9 L 17,9 M 9,1 Q 4,9 9,17 M 9,1 Q 14,9 9,17"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding RttText}"/>
+        <TextBlock Classes="desc" Text="{Binding PathText}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+              <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 2,5 L 16,5 L 16,13 L 2,13 Z M 5,8 L 5,10 M 8,8 L 8,10 M 11,8 L 11,10 M 14,8 L 14,10"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding PacketText}"/>
+        <TextBlock Classes="desc" Text="{Binding InjectionHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+              <TextBlock Classes="section" Text="{Binding Ui[quickActions]}"/>
+              <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 2,5 L 14,5 M 11,2 L 14,5 L 11,8 M 16,13 L 4,13 M 7,10 L 4,13 L 7,16"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding SwitchButton}"/>
+        <TextBlock Classes="desc" Text="{Binding SwitchShortcutLine}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Button Classes="primary" Content="{Binding SwitchButton}" Command="{Binding CycleCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+              <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 3,8 L 15,8 L 15,17 L 3,17 Z M 5,8 L 5,5 A 4,4 0 0 1 13,5 L 13,8"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding LockButton}"/>
+        <TextBlock Classes="desc" Text="{Binding LockText}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Button Classes="ghost" Content="{Binding LockButton}" Command="{Binding LockCommand}"/></StackPanel>
+    </Grid>
+  </Border>
             </StackPanel>
           </StackPanel>
 
-          <StackPanel IsVisible="{Binding ShowOverview}" Spacing="16">
-            <TextBlock Text="{Binding BrandKicker}" Classes="kicker"/>
-            <TextBlock Classes="h1" Text="{Binding NavOverview}"/>
-            <TextBlock Text="{Binding Tagline}" Classes="muted" FontSize="15"/>
-            <Border Classes="card">
-              <StackPanel Spacing="8">
-                <TextBlock Text="{Binding StatusText}" FontSize="26" FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding ListenText}" Classes="muted"/>
-                <TextBlock Text="{Binding LicenseText}" Foreground="{DynamicResource GoldBrush}"/>
-                <TextBlock Text="{Binding SwitchShortcutLine}" FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding InputTraceLine}" Foreground="{DynamicResource AccentBrush}"/>
+          <!-- ARRANGE: drag map like Settings > Display -->
+          <StackPanel IsVisible="{Binding ShowArrange}">
+            <Border Classes="card" Padding="16" Margin="0,0,0,3">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="desc" Text="{Binding Ui[arrangeHint]}"/>
+                <Border Height="320" CornerRadius="4" ClipToBounds="True">
+                  <c:LayoutCanvas x:Name="Map" Devices="{Binding LayoutDevices}" ActiveId="{Binding ActiveDeviceId}" HostLabel="{Binding HostScreenLabel}"/>
+                </Border>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding DragHint}" Classes="desc" VerticalAlignment="Center"/>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Classes="ghost" Content="{Binding SimulateLeaveLabel}" Command="{Binding SimulateLeaveCommand}"/>
+                    <Button Classes="ghost" Content="{Binding SimulateReturnLabel}" Command="{Binding SimulateReturnCommand}"/>
+                  </StackPanel>
+                </Grid>
               </StackPanel>
             </Border>
-            <UniformGrid Columns="3">
-              <Border Classes="card" Margin="0,0,10,0">
-                <StackPanel Spacing="6">
-                  <TextBlock Text="{Binding ActiveText}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                  <TextBlock Text="{Binding LockText}" Classes="muted"/>
-                </StackPanel>
-              </Border>
-              <Border Classes="card" Margin="5,0">
-                <StackPanel Spacing="6">
-                  <TextBlock Text="{Binding RttText}" FontSize="22" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding PathText}" Foreground="{DynamicResource MintBrush}"/>
-                </StackPanel>
-              </Border>
-              <Border Classes="card" Margin="10,0,0,0">
-                <StackPanel Spacing="6">
-                  <TextBlock Text="{Binding PacketText}" FontSize="16" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding InjectionHint}" Classes="muted"/>
-                </StackPanel>
-              </Border>
-            </UniformGrid>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Classes="primary" Content="{Binding SwitchButton}" Command="{Binding CycleCommand}"/>
-              <Button Classes="ghost" Content="{Binding LockButton}" Command="{Binding LockCommand}"/>
-            </StackPanel>
+            <TextBlock Text="{Binding ProblemText}" Foreground="{DynamicResource GoldBrush}" TextWrapping="Wrap" IsVisible="{Binding HasProblems}" Margin="2,6"/>
+            <TextBlock Text="{Binding LayoutHint}" Classes="desc" Margin="2,6"/>
+            <Border Classes="setting" IsVisible="{Binding !HasEditor}">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 4,1 L 14,1 L 14,17 L 4,17 Z M 8,14.5 L 10,14.5"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding NoDeviceSelected}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+            <Expander Classes="setting" IsExpanded="True" IsVisible="{Binding HasEditor}">
+    <Expander.Header>
+      <Grid ColumnDefinitions="36,*">
+        <Path Classes="icon big" Data="M 2,10 L 2,2 L 10,2 M 6,16 L 16,16 L 16,6"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="title" Text="{Binding Ui[placement]}"/>
+          <TextBlock Classes="desc" Text="{Binding Ui[placementHint]}"/>
+        </StackPanel>
+      </Grid>
+    </Expander.Header>
+    <StackPanel>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding PcEdgeLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ComboBox SelectedIndex="{Binding PcEdgeIndex}" Width="160">
+          <ComboBoxItem Content="{Binding LeftLabel}"/><ComboBoxItem Content="{Binding RightLabel}"/>
+          <ComboBoxItem Content="{Binding TopLabel}"/><ComboBoxItem Content="{Binding BottomLabel}"/>
+        </ComboBox></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding ReturnEdgeLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ComboBox SelectedIndex="{Binding ReturnEdgeIndex}" Width="160">
+          <ComboBoxItem Content="{Binding LeftLabel}"/><ComboBoxItem Content="{Binding RightLabel}"/>
+          <ComboBoxItem Content="{Binding TopLabel}"/><ComboBoxItem Content="{Binding BottomLabel}"/>
+        </ComboBox></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding AnchorLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ComboBox SelectedIndex="{Binding AnchorIndex}" Width="160"><ComboBoxItem Content="{Binding EdgeLabel}"/><ComboBoxItem Content="{Binding CornerLabel}"/></ComboBox></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding CornerLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ComboBox SelectedIndex="{Binding CornerIndex}" Width="160"><ComboBoxItem Content="{Binding TopLeftLabel}"/><ComboBoxItem Content="{Binding TopRightLabel}"/><ComboBoxItem Content="{Binding BottomLeftLabel}"/><ComboBoxItem Content="{Binding BottomRightLabel}"/></ComboBox></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding OffsetLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding OffsetHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding EditOffset}" Minimum="0" Maximum="20000" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding SpanLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding EditSpan}" Minimum="0" Maximum="20000" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding CornerSizeLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding EditCornerSize}" Minimum="20" Maximum="2000" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding SpeedLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding SpeedHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding EditSpeed}" Minimum="0.1" Maximum="8" Width="140" Increment="0.1" FormatString="0.0"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding ApplyLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding SavedText}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Button Classes="primary" Content="{Binding ApplyLabel}" Command="{Binding SaveDeviceCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+    </StackPanel>
+  </Expander>
           </StackPanel>
 
-          <StackPanel IsVisible="{Binding ShowDevices}" Spacing="16">
-            <TextBlock Classes="h1" Text="{Binding NavDevices}"/>
-            <TextBlock Text="{Binding EmptyHint}" Classes="muted" IsVisible="{Binding NoDevices}"/>
-            <ItemsControl ItemsSource="{Binding Devices}">
-              <ItemsControl.ItemTemplate>
+          <!-- DEVICES + pairing -->
+          <StackPanel IsVisible="{Binding ShowDevicesPage}">
+            <TextBlock Classes="section" Text="{Binding Ui[pairedDevices]}" Margin="2,0,0,6"/>
+            <Border Classes="setting" IsVisible="{Binding NoDevices}">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 4,1 L 14,1 L 14,17 L 4,17 Z M 8,14.5 L 10,14.5"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding EmptyDevices}"/>
+        <TextBlock Classes="desc" Text="{Binding EmptyHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+            <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" Background="Transparent" Padding="0">
+              <ListBox.Styles>
+                <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0,0,0,3"/><Setter Property="CornerRadius" Value="6"/></Style>
+              </ListBox.Styles>
+              <ListBox.ItemTemplate>
                 <DataTemplate>
-                  <Border Classes="card" Margin="0,0,0,10">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <StackPanel Spacing="4">
-                        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding Detail}" Classes="muted"/>
-                        <TextBlock Text="{Binding Badge}" Foreground="{DynamicResource MintBrush}"/>
+                  <Border Classes="setting" Margin="0">
+                    <Grid ColumnDefinitions="36,*,Auto">
+                      <Path Classes="icon big" Data="M 4,1 L 14,1 L 14,17 L 4,17 Z M 8,14.5 L 10,14.5"/>
+                      <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Classes="title" Text="{Binding Name}"/>
+                        <TextBlock Classes="desc" Text="{Binding Detail}"/>
                       </StackPanel>
-                      <Button Grid.Column="1" Classes="ghost" Content="{Binding $parent[Window].DataContext.AddDeviceLabel}"
-                              Command="{Binding $parent[Window].DataContext.RemoveDeviceCommand}" IsVisible="False"/>
+                      <TextBlock Grid.Column="2" Text="{Binding Badge}" Foreground="{DynamicResource MintBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </Grid>
                   </Border>
                 </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" MaxHeight="220"/>
-            <Button Classes="ghost" Content="{Binding RemoveLabel}" Command="{Binding RemoveDeviceCommand}" HorizontalAlignment="Left"/>
-            <TextBlock Text="{Binding DiscoveredLabel}" FontWeight="SemiBold"/>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <Border Classes="setting" IsVisible="{Binding !NoDevices}">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 4,1 L 14,1 L 14,17 L 4,17 Z M 8,14.5 L 10,14.5"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding RemoveLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Button Classes="ghost" Content="{Binding RemoveLabel}" Command="{Binding RemoveDeviceCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+            <TextBlock Classes="section" Text="{Binding DiscoveredLabel}"/>
             <ItemsControl ItemsSource="{Binding Peers}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Classes="card" Margin="0,0,0,8" Padding="12">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <StackPanel>
-                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding Detail}" Classes="muted"/>
+                  <Border Classes="setting">
+                    <Grid ColumnDefinitions="36,*,Auto">
+                      <Path Classes="icon big" Data="M 1,6 Q 9,-1 17,6 M 4,9.5 Q 9,5 14,9.5 M 7,13 Q 9,11 11,13 M 9,16 L 9,16.2"/>
+                      <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Classes="title" Text="{Binding Name}"/>
+                        <TextBlock Classes="desc" Text="{Binding Detail}"/>
                       </StackPanel>
-                      <Button Grid.Column="1" Classes="primary" Content="{Binding $parent[Window].DataContext.AddDeviceLabel}"
+                      <Button Grid.Column="2" Classes="primary" Content="{Binding $parent[Window].DataContext.AddDeviceLabel}"
                               Command="{Binding $parent[Window].DataContext.AddPeerCommand}" CommandParameter="{Binding}"/>
                     </Grid>
                   </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Border Classes="card">
-              <StackPanel Spacing="8">
-                <TextBlock Text="{Binding ManualAddLabel}" FontWeight="SemiBold"/>
-                <TextBox Text="{Binding ManualName}" Watermark="{Binding NameLabel}"/>
-                <TextBox Text="{Binding ManualAddress}" Watermark="{Binding AddressLabel}"/>
-                <NumericUpDown Value="{Binding ManualPort}" Minimum="1" Maximum="65535"/>
-                <Button Classes="primary" Content="{Binding AddDeviceLabel}" Command="{Binding AddManualCommand}" HorizontalAlignment="Left"/>
-              </StackPanel>
-            </Border>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding ShowLayout}" Spacing="16">
-            <TextBlock Classes="h1" Text="{Binding NavLayout}"/>
-            <TextBlock Text="{Binding LayoutHint}" Classes="muted"/>
-            <TextBlock Text="{Binding DragHint}" Classes="muted"/>
-            <Border Classes="card" Height="360" Padding="8">
-              <c:LayoutCanvas x:Name="Map" Devices="{Binding LayoutDevices}" ActiveId="{Binding ActiveDeviceId}" HostLabel="{Binding HostScreenLabel}"/>
-            </Border>
-            <TextBlock Text="{Binding ProblemText}" Foreground="{DynamicResource GoldBrush}" TextWrapping="Wrap" IsVisible="{Binding HasProblems}"/>
-            <TextBlock Text="{Binding NoDeviceSelected}" Classes="muted" IsVisible="{Binding !HasEditor}"/>
-            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" IsVisible="{Binding HasEditor}">
-              <TextBlock Text="{Binding PcEdgeLabel}"/>
-              <ComboBox Grid.Row="1" SelectedIndex="{Binding PcEdgeIndex}" Margin="0,4,8,8">
-                <ComboBoxItem Content="{Binding LeftLabel}"/>
-                <ComboBoxItem Content="{Binding RightLabel}"/>
-                <ComboBoxItem Content="{Binding TopLabel}"/>
-                <ComboBoxItem Content="{Binding BottomLabel}"/>
-              </ComboBox>
-              <TextBlock Grid.Column="1" Text="{Binding ReturnEdgeLabel}"/>
-              <ComboBox Grid.Column="1" Grid.Row="1" SelectedIndex="{Binding ReturnEdgeIndex}" Margin="8,4,0,8">
-                <ComboBoxItem Content="{Binding LeftLabel}"/>
-                <ComboBoxItem Content="{Binding RightLabel}"/>
-                <ComboBoxItem Content="{Binding TopLabel}"/>
-                <ComboBoxItem Content="{Binding BottomLabel}"/>
-              </ComboBox>
-              <TextBlock Grid.Row="2" Text="{Binding AnchorLabel}"/>
-              <ComboBox Grid.Row="3" SelectedIndex="{Binding AnchorIndex}" Margin="0,4,8,8">
-                <ComboBoxItem Content="{Binding EdgeLabel}"/>
-                <ComboBoxItem Content="{Binding CornerLabel}"/>
-              </ComboBox>
-              <TextBlock Grid.Column="1" Grid.Row="2" Text="{Binding CornerLabel}"/>
-              <ComboBox Grid.Column="1" Grid.Row="3" SelectedIndex="{Binding CornerIndex}" Margin="8,4,0,8">
-                <ComboBoxItem Content="{Binding TopLeftLabel}"/>
-                <ComboBoxItem Content="{Binding TopRightLabel}"/>
-                <ComboBoxItem Content="{Binding BottomLeftLabel}"/>
-                <ComboBoxItem Content="{Binding BottomRightLabel}"/>
-              </ComboBox>
-              <TextBlock Grid.Row="4" Text="{Binding OffsetLabel}"/>
-              <NumericUpDown Grid.Row="5" Value="{Binding EditOffset}" Minimum="0" Maximum="20000" Margin="0,4,8,0"/>
-              <TextBlock Grid.Column="1" Grid.Row="4" Text="{Binding SpanLabel}"/>
-              <NumericUpDown Grid.Column="1" Grid.Row="5" Value="{Binding EditSpan}" Minimum="0" Maximum="20000" Margin="8,4,0,0"/>
-            </Grid>
-            <TextBlock Text="{Binding CornerSizeLabel}" IsVisible="{Binding HasEditor}"/>
-            <NumericUpDown Value="{Binding EditCornerSize}" Minimum="20" Maximum="2000" IsVisible="{Binding HasEditor}"/>
-            <TextBlock Text="{Binding SpeedLabel}" IsVisible="{Binding HasEditor}"/>
-            <NumericUpDown Value="{Binding EditSpeed}" Minimum="0.1" Maximum="8" Increment="0.1" FormatString="0.0" IsVisible="{Binding HasEditor}"/>
+            <TextBlock Classes="section" Text="{Binding Ui[pairNew]}"/>
+            <Expander Classes="setting" IsExpanded="True">
+    <Expander.Header>
+      <Grid ColumnDefinitions="36,*">
+        <Path Classes="icon big" Data="M 3,8 L 15,8 L 15,17 L 3,17 Z M 6,8 L 6,5 A 3,3 0 0 1 12,5 L 12,8"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="title" Text="{Binding StartPairingLabel}"/>
+          <TextBlock Classes="desc" Text="{Binding QrHint}"/>
+        </StackPanel>
+      </Grid>
+    </Expander.Header>
+    <StackPanel>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding StartPairingLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding Ui[pairNewHint]}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Button Classes="primary" Content="{Binding StartPairingLabel}" Command="{Binding StartPairingCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+      <Border Classes="setting sub" IsVisible="{Binding PairingVisible}" Background="{DynamicResource PinCardBrush}">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="8">
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Classes="primary" Content="{Binding ApplyLabel}" Command="{Binding SaveDeviceCommand}"/>
-              <Button Classes="ghost" Content="{Binding SimulateLeaveLabel}" Command="{Binding SimulateLeaveCommand}"/>
-              <Button Classes="ghost" Content="{Binding SimulateReturnLabel}" Command="{Binding SimulateReturnCommand}"/>
+              <Path Data="M 2,8 L 7,13 L 16,3" Stroke="{DynamicResource MintBrush}" StrokeThickness="2.2" StrokeJoin="Round" StrokeLineCap="Round" Width="18" Height="16" Stretch="Uniform" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding PairingState}" TextWrapping="Wrap" VerticalAlignment="Center"/>
             </StackPanel>
-            <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}"/>
+            <TextBlock Text="{Binding PinLabel}" Classes="desc"/>
+            <TextBlock Text="{Binding PinText}" FontSize="44" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"/>
+            <Button Classes="ghost" Content="{Binding CopyPinLabel}" Command="{Binding CopyPinCommand}" HorizontalAlignment="Left"/>
+          </StackPanel>
+          <Border Grid.Column="1" Background="White" CornerRadius="8" Padding="8" VerticalAlignment="Top">
+            <Image Source="{Binding QrImage}" Width="220" Height="220"/>
+          </Border>
+        </Grid>
+      </Border>
+    </StackPanel>
+  </Expander>
+            <Expander Classes="setting" IsExpanded="False">
+    <Expander.Header>
+      <Grid ColumnDefinitions="36,*">
+        <Path Classes="icon big" Data="M 9,2 L 9,16 M 2,9 L 16,9"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="title" Text="{Binding ManualAddLabel}"/>
+          <TextBlock Classes="desc" Text="{Binding Ui[manualHint]}"/>
+        </StackPanel>
+      </Grid>
+    </Expander.Header>
+    <StackPanel>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding NameLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding ManualName}" Width="220"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding AddressLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding ManualAddress}" Width="220"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding PortLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding ManualPort}" Minimum="1" Maximum="65535" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding AddDeviceLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Button Classes="primary" Content="{Binding AddDeviceLabel}" Command="{Binding AddManualCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+    </StackPanel>
+  </Expander>
+            <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}" Margin="2,8"/>
           </StackPanel>
 
-          <StackPanel IsVisible="{Binding ShowNetwork}" Spacing="16">
-            <TextBlock Classes="h1" Text="{Binding NavNetwork}"/>
-            <TextBlock Text="{Binding SecurityNote}" Classes="muted"/>
+          <!-- TRANSFERS -->
+          <StackPanel IsVisible="{Binding ShowTransfers}">
+            <TextBlock Classes="desc" Text="{Binding Ui[transfersHint]}" Margin="2,0,0,10"/>
+            <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 5,3 L 3,3 L 3,17 L 15,17 L 15,3 L 13,3 M 6,1 L 12,1 L 12,5 L 6,5 Z"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding ClipboardLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding ClipboardShare}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+            <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 3,1 L 11,1 L 15,5 L 15,17 L 3,17 Z M 11,1 L 11,5 L 15,5"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding FileTransferLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding FileTransfer}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+            <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 2,6 L 15,6 M 11,2 L 15,6 L 11,10 M 16,12 L 3,12 M 7,8 L 3,12 L 7,16"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding HandoffPcLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding HandoffPcHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding HandoffPc}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+            <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 8,8 0 1 1 8.99,1 M 9,8 L 9,13 M 9,5 L 9,5.2"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding HandoffStatus}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+            <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,6 A 3,3 0 1 1 8.99,6 M 9,1 L 9,3 M 9,15 L 9,17 M 1,9 L 3,9 M 15,9 L 17,9 M 3.3,3.3 L 4.7,4.7 M 13.3,13.3 L 14.7,14.7 M 3.3,14.7 L 4.7,13.3 M 13.3,4.7 L 14.7,3.3"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding SaveLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding SavedText}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Button Classes="primary" Content="{Binding SaveLabel}" Command="{Binding SaveSettingsCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+            <TextBlock Classes="section" Text="{Binding Ui[activity]}"/>
             <Border Classes="card">
-              <StackPanel Spacing="10">
-                <TextBlock Text="{Binding NameLabel}"/>
-                <TextBox Text="{Binding DisplayName}"/>
-                <TextBlock Text="{Binding ListenPortLabel}"/>
-                <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"/>
-                <TextBlock Text="{Binding ListenText}" Classes="muted"/>
-                <CheckBox Content="{Binding ClipboardLabel}" IsChecked="{Binding ClipboardShare}"/>
-                <CheckBox Content="{Binding FileTransferLabel}" IsChecked="{Binding FileTransfer}"/>
-                <CheckBox Content="{Binding HotkeySwitchEnableLabel}" IsChecked="{Binding HotkeySwitchEnabled}"/>
-                <TextBlock Text="{Binding HotkeySwitchLabel}"/>
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBox Text="{Binding HotkeySwitch}" Margin="0,0,8,0"/>
-                  <Button Grid.Column="1" Classes="ghost" Content="{Binding RecordHotkeyLabel}" Command="{Binding RecordHotkeyCommand}"/>
-                </Grid>
-                <TextBlock Text="{Binding HotkeyConflict}" Foreground="{DynamicResource GoldBrush}" TextWrapping="Wrap" IsVisible="{Binding HasHotkeyConflict}"/>
-                <TextBlock Text="{Binding NumberHotkeysHint}" Classes="muted" TextWrapping="Wrap"/>
-                <CheckBox Content="{Binding DeviceNumberHotkeysLabel}" IsChecked="{Binding DeviceNumberHotkeys}"/>
-                <TextBlock Text="{Binding HotkeyLockLabel}"/>
-                <TextBox Text="{Binding HotkeyLock}"/>
-                <CheckBox Content="{Binding GlowEnableLabel}" IsChecked="{Binding EdgeGlowEnabled}"/>
-                <CheckBox Content="{Binding BreakthroughLabel}" IsChecked="{Binding BreakthroughEnabled}"/>
-                <TextBlock Text="{Binding BreakthroughIntensityLabel}"/>
-                <NumericUpDown Value="{Binding BreakthroughIntensity}" Minimum="0" Maximum="100"/>
-                <c:BreakthroughSketch Height="56" Intensity="{Binding BreakthroughIntensity}" Reduce="{Binding ReduceMotion}"/>
-                <CheckBox Content="{Binding ReduceMotionLabel}" IsChecked="{Binding ReduceMotion}"/>
-                <CheckBox Content="{Binding SoundLabel}" IsChecked="{Binding SoundEnabled}"/>
-                <TextBlock Text="{Binding SoundHint}" Classes="muted" TextWrapping="Wrap"/>
-                <CheckBox Content="{Binding HandoffPcLabel}" IsChecked="{Binding HandoffPc}"/>
-                <TextBlock Text="{Binding HandoffPcHint}" Classes="muted" TextWrapping="Wrap"/>
-                <TextBlock Text="{Binding HandoffStatus}" TextWrapping="Wrap"/>
-                <TextBlock Text="{Binding GlowColorLabel}"/>
-                <TextBox Text="{Binding EdgeGlowColor}"/>
-                <TextBlock Text="{Binding GlowIntensityLabel}"/>
-                <NumericUpDown Value="{Binding EdgeGlowIntensity}" Minimum="0" Maximum="100"/>
-                <TextBlock Text="{Binding GlowThicknessLabel}"/>
-                <NumericUpDown Value="{Binding EdgeGlowThickness}" Minimum="4" Maximum="120"/>
-                <CheckBox Content="{Binding StartupLabel}" IsChecked="{Binding LaunchAtStartup}" IsEnabled="{Binding IsWindows}"/>
-                <TextBlock Text="{Binding StartupHint}" Classes="muted"/>
-                <CheckBox Content="{Binding EnableInternetLabel}" IsChecked="{Binding InternetEnabled}"/>
-                <TextBlock Text="{Binding RelayLabel}"/>
-                <TextBox Text="{Binding RelayUrl}"/>
-                <TextBlock Text="{Binding StunLabel}"/>
-                <Grid ColumnDefinitions="*,120">
-                  <TextBox Text="{Binding StunHost}" Margin="0,0,8,0"/>
-                  <NumericUpDown Grid.Column="1" Value="{Binding StunPort}" Minimum="1" Maximum="65535"/>
-                </Grid>
-                <TextBlock Text="{Binding RawInputNote}" Classes="muted"/>
-                <Button Classes="primary" Content="{Binding SaveLabel}" Command="{Binding SaveSettingsCommand}" HorizontalAlignment="Left"/>
-                <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}"/>
-                <TextBlock Text="{Binding DiagTitle}" FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding DiagLogLabel}" Classes="muted"/>
-                <TextBlock Text="{Binding DiagPath}" TextWrapping="Wrap"/>
-                <TextBlock Text="{Binding DiagTail}" Classes="muted" TextWrapping="Wrap"/>
-                <TextBlock Text="{Binding InjectNoteText}" TextWrapping="Wrap"/>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Button Classes="ghost" Content="{Binding DiagExportLabel}" Command="{Binding ExportLogCommand}"/>
-                  <Button Classes="ghost" Content="{Binding OpenSamsungLabel}" Command="{Binding OpenSamsungCommand}"/>
-                </StackPanel>
-              </StackPanel>
+              <ItemsControl ItemsSource="{Binding Logs}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate><TextBlock Text="{Binding}" Classes="desc"/></DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
             </Border>
           </StackPanel>
 
-          <StackPanel IsVisible="{Binding ShowPairing}" Spacing="16">
-            <TextBlock Text="PIN" Classes="kicker"/>
-            <TextBlock Classes="h1" Text="{Binding NavPairing}"/>
-            <TextBlock Text="{Binding QrHint}" Classes="muted" FontSize="15"/>
-            <Button Classes="primary" Content="{Binding StartPairingLabel}" Command="{Binding StartPairingCommand}" HorizontalAlignment="Left"/>
-            <Border Classes="card" IsVisible="{Binding PairingVisible}" Background="#F7FBFF">
-              <StackPanel Spacing="12">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Path Data="M 2,8 L 7,13 L 16,3" Stroke="#0E7A3D" StrokeThickness="2.2" StrokeJoin="Round" StrokeLineCap="Round" Width="18" Height="16" Stretch="Uniform" VerticalAlignment="Center"/>
-                  <TextBlock Text="{Binding PairingState}" TextWrapping="Wrap" Foreground="#12182B" VerticalAlignment="Center"/>
-                </StackPanel>
-                <TextBlock Text="{Binding PinLabel}" Foreground="#5C6A8A"/>
-                <TextBlock Text="{Binding PinText}" FontSize="48" FontWeight="SemiBold" Foreground="#174A8B"/>
-                <Image Source="{Binding QrImage}" Width="260" Height="260" HorizontalAlignment="Left"/>
-                <Button Classes="ghost" Content="{Binding CopyPinLabel}" Command="{Binding CopyPinCommand}" HorizontalAlignment="Left"/>
-              </StackPanel>
-            </Border>
-            <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}"/>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding ShowLicense}" Spacing="16">
-            <TextBlock Classes="h1" Text="{Binding NavLicense}"/>
-            <Border Classes="card">
-              <TextBlock Text="{Binding LicenseText}" FontSize="22" FontWeight="SemiBold"/>
-            </Border>
-            <TextBlock Text="{Binding LicenseNote}" Classes="muted"/>
-            <TextBlock Text="{Binding LicenseKeyLabel}"/>
-            <TextBox Text="{Binding LicenseKey}" Watermark="ES-PR-XXXXXXXX-XXXX"/>
-            <Button Classes="primary" Content="{Binding ActivateLabel}" Command="{Binding ActivateCommand}" HorizontalAlignment="Left"/>
-            <TextBlock Text="{Binding SavedText}" Foreground="{DynamicResource MintBrush}"/>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding ShowAbout}" Spacing="16">
-            <StackPanel Orientation="Horizontal" Spacing="14">
-              <Image Source="/Assets/icon.png" Width="72" Height="72"/>
-              <StackPanel VerticalAlignment="Center" Spacing="4">
-                <TextBlock Text="EdgeSpan" FontSize="28" FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding VersionText}" Foreground="{DynamicResource GoldBrush}"/>
-                <TextBlock Text="{Binding BuildText}" Classes="muted"/>
-              </StackPanel>
-            </StackPanel>
-            <TextBlock Text="{Binding AboutBody}" TextWrapping="Wrap" FontSize="15" LineHeight="24"/>
-            <Border Classes="card">
-              <TextBlock Text="{Binding LicenseText}" FontSize="18" FontWeight="SemiBold"/>
-            </Border>
-            <TextBlock Text="{Binding Eula}" Classes="muted"/>
-            <TextBlock Text="{Binding HideHint}" Classes="muted"/>
-            <TextBlock Text="{Binding DiagPathHint}" TextWrapping="Wrap" Classes="muted"/>
-            <TextBlock Text="{Binding DiagPath}" Classes="muted"/>
-            <Button Classes="ghost" Content="{Binding DiagExportLabel}" Command="{Binding ExportLogCommand}" HorizontalAlignment="Left"/>
-            <TextBlock Text="{Binding LogLabel}" FontWeight="SemiBold"/>
-            <ItemsControl ItemsSource="{Binding Logs}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <TextBlock Text="{Binding}" Classes="muted" FontSize="12"/>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+          <!-- SETTINGS -->
+          <StackPanel IsVisible="{Binding ShowSettingsPage}">
+            <TextBlock Classes="section" Text="{Binding Ui[setGeneral]}"/>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,2 A 3.5,3.5 0 1 1 8.99,2 M 2,17 Q 9,8 16,17"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding NameLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding DisplayName}" Width="220"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 1,3 L 11,3 M 6,1 L 6,3 M 3,3 Q 5,10 11,12 M 9,3 Q 7,10 1,12 M 9,17 L 13,7 L 17,17 M 10.5,13.5 L 15.5,13.5"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding LanguageLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding Ui[langHint]}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ComboBox SelectedIndex="{Binding LanguageIndex}" Width="160"><ComboBoxItem Content="{Binding EnglishLabel}"/><ComboBoxItem Content="{Binding PersianLabel}"/></ComboBox></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 8,8 0 1 1 8.99,1 M 9,1 L 9,17 A 8,8 0 0 0 9,1"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding Ui[themeMode]}"/>
+        <TextBlock Classes="desc" Text="{Binding Ui[themeHint]}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ComboBox SelectedIndex="{Binding ThemeIndex}" Width="200"><ComboBoxItem Content="{Binding Ui[themeSystem]}"/><ComboBoxItem Content="{Binding LightLabel}"/><ComboBoxItem Content="{Binding DarkLabel}"/></ComboBox></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 L 9,8 M 5,3.5 A 7,7 0 1 0 13,3.5"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding StartupLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding StartupHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding LaunchAtStartup}" OnContent="" OffContent="" IsEnabled="{Binding IsWindows}"/></StackPanel>
+    </Grid>
+  </Border>
+            <TextBlock Classes="section" Text="{Binding Ui[setInput]}"/>
+<Expander Classes="setting" IsExpanded="False">
+    <Expander.Header>
+      <Grid ColumnDefinitions="36,*">
+        <Path Classes="icon big" Data="M 1,4 L 17,4 L 17,14 L 1,14 Z M 4,7 L 5,7 M 8,7 L 10,7 M 13,7 L 14,7 M 5,11 L 13,11"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="title" Text="{Binding Ui[hotkeysSection]}"/>
+          <TextBlock Classes="desc" Text="{Binding SwitchShortcutLine}"/>
+        </StackPanel>
+      </Grid>
+    </Expander.Header>
+    <StackPanel>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding HotkeySwitchEnableLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding HotkeySwitchEnabled}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding HotkeySwitchLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding HotkeyConflict}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding HotkeySwitch}" Width="180"/><Button Classes="ghost" Content="{Binding RecordHotkeyLabel}" Command="{Binding RecordHotkeyCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding DeviceNumberHotkeysLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding NumberHotkeysHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding DeviceNumberHotkeys}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding HotkeyLockLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding HotkeyLock}" Width="180"/></StackPanel>
+    </Grid>
+  </Border>
+    </StackPanel>
+  </Expander>
+<Expander Classes="setting" IsExpanded="False">
+    <Expander.Header>
+      <Grid ColumnDefinitions="36,*">
+        <Path Classes="icon big" Data="M 9,1 L 9,17 M 5,4 Q 2,9 5,14 M 13,4 Q 16,9 13,14"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="title" Text="{Binding Ui[glowSection]}"/>
+          <TextBlock Classes="desc" Text="{Binding Ui[glowSectionHint]}"/>
+        </StackPanel>
+      </Grid>
+    </Expander.Header>
+    <StackPanel>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding GlowEnableLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding EdgeGlowEnabled}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding GlowColorLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding EdgeGlowColor}" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding GlowIntensityLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding EdgeGlowIntensity}" Minimum="0" Maximum="100" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding GlowThicknessLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding EdgeGlowThickness}" Minimum="4" Maximum="120" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding BreakthroughLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding BreakthroughEnabled}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding BreakthroughIntensityLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding BreakthroughIntensity}" Minimum="0" Maximum="100" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+      <Border Classes="setting sub"><c:BreakthroughSketch Height="56" Intensity="{Binding BreakthroughIntensity}" Reduce="{Binding ReduceMotion}"/></Border>
+    </StackPanel>
+  </Expander>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 1,9 Q 5,1 9,9 Q 13,17 17,9"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding ReduceMotionLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding ReduceMotion}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 2,6 L 5,6 L 10,2 L 10,16 L 5,12 L 2,12 Z M 13,6 Q 15,9 13,12"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding SoundLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding SoundHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding SoundEnabled}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 5,6 0 0 1 14,7 L 14,11 A 5,6 0 0 1 4,11 L 4,7 A 5,6 0 0 1 9,1 Z M 9,1 L 9,6"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding RawInputNote}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+            <TextBlock Classes="section" Text="{Binding Ui[setClipFiles]}"/>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 5,3 L 3,3 L 3,17 L 15,17 L 15,3 L 13,3 M 6,1 L 12,1 L 12,5 L 6,5 Z"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding ClipboardLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding ClipboardShare}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 3,1 L 11,1 L 15,5 L 15,17 L 3,17 Z M 11,1 L 11,5 L 15,5"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding FileTransferLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding FileTransfer}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 2,6 L 15,6 M 11,2 L 15,6 L 11,10 M 16,12 L 3,12 M 7,8 L 3,12 L 7,16"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding HandoffPcLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding HandoffPcHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding HandoffPc}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+            <TextBlock Classes="section" Text="{Binding Ui[setConnection]}"/>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 2,5 L 16,5 L 16,13 L 2,13 Z M 5,8 L 5,10 M 8,8 L 8,10 M 11,8 L 11,10 M 14,8 L 14,10"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding ListenPortLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding ListenText}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535" Width="140"/></StackPanel>
+    </Grid>
+  </Border>
+<Expander Classes="setting" IsExpanded="False">
+    <Expander.Header>
+      <Grid ColumnDefinitions="36,*">
+        <Path Classes="icon big" Data="M 9,1 A 8,8 0 1 1 8.99,1 M 1,9 L 17,9 M 9,1 Q 4,9 9,17 M 9,1 Q 14,9 9,17"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="title" Text="{Binding Ui[setAdvanced]}"/>
+          <TextBlock Classes="desc" Text="{Binding Ui[connectionHint]}"/>
+        </StackPanel>
+      </Grid>
+    </Expander.Header>
+    <StackPanel>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding EnableInternetLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding InternetEnabled}" OnContent="" OffContent=""/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding RelayLabel}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding RelayUrl}" Width="260"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding StunLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding StunHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding StunHost}" Width="180"/><NumericUpDown Value="{Binding StunPort}" Minimum="1" Maximum="65535" Width="110"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding PublicHostLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding PublicHostHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding PublicHost}" Width="180" Watermark="203.0.113.10"/><NumericUpDown Value="{Binding PublicPort}" Minimum="0" Maximum="65535" Width="110"/></StackPanel>
+    </Grid>
+  </Border>
+    </StackPanel>
+  </Expander>
+            <TextBlock Classes="section" Text="{Binding Ui[setPrivacy]}"/>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 L 16,4 L 16,9 Q 16,15 9,17 Q 2,15 2,9 L 2,4 Z"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding SecurityNote}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+<Expander Classes="setting" IsExpanded="False">
+    <Expander.Header>
+      <Grid ColumnDefinitions="36,*">
+        <Path Classes="icon big" Data="M 5,9 A 4,4 0 1 1 4.99,9 M 9,9 L 17,9 M 14,9 L 14,12 M 16,9 L 16,11"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="title" Text="{Binding Ui[licenseSection]}"/>
+          <TextBlock Classes="desc" Text="{Binding LicenseText}"/>
+        </StackPanel>
+      </Grid>
+    </Expander.Header>
+    <StackPanel>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding LicenseKeyLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding LicenseNote}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><TextBox Text="{Binding LicenseKey}" Width="240" Watermark="ES-PR-XXXXXXXX-XXXX"/><Button Classes="primary" Content="{Binding ActivateLabel}" Command="{Binding ActivateCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding Eula}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+    </StackPanel>
+  </Expander>
+            <TextBlock Classes="section" Text="{Binding Ui[setAbout]}"/>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <Image Source="/Assets/icon.png" Width="40" Height="40" Margin="0,0,14,0"/>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+        <TextBlock Text="EdgeSpan" FontSize="16" FontWeight="SemiBold"/>
+        <TextBlock Classes="desc" Text="{Binding BuildText}"/>
+      </StackPanel>
+      <TextBlock Grid.Column="2" Text="{Binding VersionText}" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+    </Grid>
+  </Border>
+<Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 8,8 0 1 1 8.99,1 M 9,8 L 9,13 M 9,5 L 9,5.2"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding AboutBody}"/>
+        <TextBlock Classes="desc" Text="{Binding HideHint}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+<Expander Classes="setting" IsExpanded="False">
+    <Expander.Header>
+      <Grid ColumnDefinitions="36,*">
+        <Path Classes="icon big" Data="M 6,5 L 12,5 L 13,13 Q 9,17 5,13 Z M 2,8 L 5,8 M 13,8 L 16,8 M 2,13 L 5,12 M 13,12 L 16,13 M 7,2 L 6,5 M 11,2 L 12,5"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="title" Text="{Binding DiagTitle}"/>
+          <TextBlock Classes="desc" Text="{Binding DiagPathHint}"/>
+        </StackPanel>
+      </Grid>
+    </Expander.Header>
+    <StackPanel>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding DiagLogLabel}"/>
+        <TextBlock Classes="desc" Text="{Binding DiagPath}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><Button Classes="ghost" Content="{Binding DiagExportLabel}" Command="{Binding ExportLogCommand}"/><Button Classes="ghost" Content="{Binding OpenSamsungLabel}" Command="{Binding OpenSamsungCommand}"/></StackPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding InjectNoteText}"/>
+        <TextBlock Classes="desc" Text="{Binding DiagTail}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"></StackPanel>
+    </Grid>
+  </Border>
+      <Border Classes="setting sub">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="title" Text="{Binding LogLabel}" FontWeight="SemiBold"/>
+          <ItemsControl ItemsSource="{Binding Logs}">
+            <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Classes="desc"/></DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </Expander>
           </StackPanel>
         </StackPanel>
       </ScrollViewer>

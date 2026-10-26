@@ -71,11 +71,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ShowPairingCommand = new RelayCommand(() => Page = 4);
         ShowLicenseCommand = new RelayCommand(() => Page = 5);
         ShowAboutCommand = new RelayCommand(() => Page = 6);
+        ShowHomeCommand = new RelayCommand(() => Page = 0);
+        ShowArrangeCommand = new RelayCommand(() => Page = 2);
+        ShowTransfersCommand = new RelayCommand(() => Page = 8);
+        ShowSettingsCommand = new RelayCommand(() => Page = 3);
+        SystemThemeCommand = new RelayCommand(() => SetThemeMode("system"));
         EnglishCommand = new RelayCommand(() => SetLanguage("en"));
         PersianCommand = new RelayCommand(() => SetLanguage("fa"));
         DarkCommand = new RelayCommand(() => SetTheme(true));
         LightCommand = new RelayCommand(() => SetTheme(false));
         IsDark = !string.Equals(_runtime.Host.Settings.Theme, "light", StringComparison.OrdinalIgnoreCase);
+        Ui = new UiText(_runtime.Host.Settings.Language);
         SaveSettingsCommand = new RelayCommand(SaveSettings);
         SaveDeviceCommand = new RelayCommand(SaveDevice);
         RemoveDeviceCommand = new RelayCommand(RemoveSelected);
@@ -120,6 +126,63 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<string> Logs { get; } = new();
 
     public RelayCommand ShowConnectCommand { get; }
+    public RelayCommand ShowHomeCommand { get; }
+    public RelayCommand ShowArrangeCommand { get; }
+    public RelayCommand ShowTransfersCommand { get; }
+    public RelayCommand ShowSettingsCommand { get; }
+    public RelayCommand SystemThemeCommand { get; }
+
+    /// <summary>Win11-style UI strings, bound as {Binding Ui[key]}.</summary>
+    public UiText Ui { get; private set; } = new("en");
+
+    public bool FollowSystemTheme => string.Equals(_runtime.Host.Settings.Theme, "system", StringComparison.OrdinalIgnoreCase);
+
+    public int ThemeIndex
+    {
+        get => FollowSystemTheme ? 0 : IsDark ? 2 : 1;
+        set => SetThemeMode(value switch { 1 => "light", 2 => "dark", _ => "system" });
+    }
+
+    public int LanguageIndex
+    {
+        get => Catalog.IsRtl(_runtime.Host.Settings.Language) ? 1 : 0;
+        set => SetLanguage(value == 1 ? "fa" : "en");
+    }
+
+    private string _search = "";
+
+    /// <summary>"Find a setting": jumps to the page whose keywords match.</summary>
+    public string SearchText
+    {
+        get => _search;
+        set
+        {
+            _search = value ?? "";
+            Notify(nameof(SearchText));
+            var page = UiText.FindPage(_search);
+            if (page is { } target && target != _page)
+                Page = target;
+        }
+    }
+
+    public bool ShowHome => _page is 0 or 7;
+    public bool ShowArrange => _page == 2;
+    public bool ShowDevicesPage => _page is 1 or 4;
+    public bool ShowTransfers => _page == 8;
+    public bool ShowSettingsPage => _page is 3 or 5 or 6;
+    public bool HomeSelected => ShowHome;
+    public bool ArrangeSelected => ShowArrange;
+    public bool DevicesNavSelected => ShowDevicesPage;
+    public bool TransfersSelected => ShowTransfers;
+    public bool SettingsSelected => ShowSettingsPage;
+    public string PageTitle => _page switch
+    {
+        0 or 7 => Ui["navHome"],
+        2 => Ui["navArrange"],
+        1 or 4 => Ui["navDevicesW"],
+        8 => Ui["navTransfers"],
+        _ => Ui["navSettings"]
+    };
     public RelayCommand ShowOverviewCommand { get; }
     public RelayCommand ShowDevicesCommand { get; }
     public RelayCommand ShowLayoutCommand { get; }
@@ -155,8 +218,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public string ProductName => ProductInfo.Name;
     public bool IsWindows => OperatingSystem.IsWindows();
-    public bool ShowConnect => _page == 7;
-    public bool ShowOverview => _page == 0;
+    // Home merges the connect flow (old page 7) with the live status (old page 0).
+    public bool ShowConnect => _page is 7 or 0;
+    public bool ShowOverview => _page is 0 or 7;
     public bool ShowDevices => _page == 1;
     public bool ShowLayout => _page == 2;
     public bool ShowNetwork => _page == 3;
@@ -184,7 +248,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 nameof(ShowConnect), nameof(ShowOverview), nameof(ShowDevices), nameof(ShowLayout), nameof(ShowNetwork),
                 nameof(ShowPairing), nameof(ShowLicense), nameof(ShowAbout),
                 nameof(ConnectSelected), nameof(OverviewSelected), nameof(DevicesSelected), nameof(LayoutSelected),
-                nameof(NetworkSelected), nameof(PairingSelected), nameof(LicenseSelected), nameof(AboutSelected)
+                nameof(NetworkSelected), nameof(PairingSelected), nameof(LicenseSelected), nameof(AboutSelected),
+                nameof(ShowHome), nameof(ShowArrange), nameof(ShowDevicesPage), nameof(ShowTransfers), nameof(ShowSettingsPage),
+                nameof(HomeSelected), nameof(ArrangeSelected), nameof(DevicesNavSelected), nameof(TransfersSelected),
+                nameof(SettingsSelected), nameof(PageTitle)
             })
                 Notify(name);
         }
@@ -714,6 +781,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             nameof(QuitText), nameof(WidthLabel), nameof(HeightLabel), nameof(NoDeviceSelected), nameof(InjectionHint),
             nameof(Eula), nameof(StartupHint), nameof(HideHint), nameof(SimulateLeaveLabel), nameof(SimulateReturnLabel),
             nameof(RawInputNote), nameof(ManualAddLabel), nameof(ApplyLabel));
+        Ui = new UiText(lang);
+        NotifyMany(nameof(Ui), nameof(PageTitle), nameof(LanguageIndex));
     }
 
     private void LoadSettingsIntoForm()
@@ -797,15 +866,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
         }
         if (int.TryParse(Environment.GetEnvironmentVariable("EDGESPAN_PAGE"), out var page))
-            Page = Math.Clamp(page, 0, 7);
+            Page = Math.Clamp(page, 0, 8);
     }
 
-    private void SetTheme(bool dark)
+    private void SetTheme(bool dark) => SetThemeMode(dark ? "dark" : "light");
+
+    private void SetThemeMode(string mode)
     {
-        IsDark = dark;
-        _runtime.Host.Settings.Theme = dark ? "dark" : "light";
+        if (mode != "system")
+            IsDark = mode == "dark";
+        _runtime.Host.Settings.Theme = mode;
         _runtime.Host.Save();
         Notify(nameof(IsDark));
+        Notify(nameof(FollowSystemTheme));
+        Notify(nameof(ThemeIndex));
         ThemeChanged?.Invoke();
     }
 

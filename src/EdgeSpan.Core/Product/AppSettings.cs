@@ -26,7 +26,7 @@ public sealed class AppSettings
     public int Schema { get; set; } = 1;
     public string HostId { get; set; } = Guid.NewGuid().ToString("N");
     public string Language { get; set; } = "en";
-    public string Theme { get; set; } = "dark";
+    public string Theme { get; set; } = "system";
     public string DisplayName { get; set; } = Environment.MachineName;
     public int ListenPort { get; set; } = ProductInfo.DefaultSessionPort;
     public int ScreenWidth { get; set; } = 1920;
