@@ -262,6 +262,12 @@ public static class Payloads
         return true;
     }
 
+    public static byte[] GlowStyle(string? hex, int intensity)
+    {
+        var (r, g, b) = EdgeSpan.Layout.GlowBand.ParseColor(hex);
+        return new[] { r, g, b, (byte)Math.Clamp(intensity, 0, 100) };
+    }
+
     public static byte[] EdgeEnter(byte returnEdge, int x, int y, ushort width, ushort height)
     {
         var buf = new byte[13];

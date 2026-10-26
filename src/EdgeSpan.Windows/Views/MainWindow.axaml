@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:c="using:EdgeSpan.Windows.Controls"
+        xmlns:vm="using:EdgeSpan.Windows.ViewModels"
         x:Class="EdgeSpan.Windows.Views.MainWindow"
         Title="EdgeSpan"
         Width="1180" Height="800"
@@ -740,7 +741,15 @@
       <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
         <TextBlock Classes="title" Text="{Binding GlowColorLabel}"/>
       </StackPanel>
-      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><TextBox Text="{Binding EdgeGlowColor}" Width="140"/></WrapPanel>
+      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><ItemsControl ItemsSource="{x:Static vm:MainViewModel.GlowSwatches}">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate><DataTemplate>
+            <Button Width="24" Height="24" Padding="0" Margin="0,0,6,4" CornerRadius="12" Background="{Binding}" BorderBrush="{DynamicResource CardLineBrush}" BorderThickness="1" ToolTip.Tip="{Binding}"
+                    Command="{Binding $parent[ItemsControl].DataContext.PickGlowColorCommand}" CommandParameter="{Binding}"/>
+          </DataTemplate></ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <ColorPicker Color="{Binding GlowColorValue, Mode=TwoWay}" IsAlphaEnabled="False" IsAlphaVisible="False" Margin="0,0,8,4"/>
+        <TextBlock Text="{Binding EdgeGlowColor}" Classes="desc" VerticalAlignment="Center" FontFamily="Consolas"/></WrapPanel>
     </Grid>
   </Border>
 <Border Classes="setting sub">

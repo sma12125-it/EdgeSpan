@@ -290,8 +290,11 @@ class EdgeGlowOverlay(private val app: Context) {
                     else -> Pair(d, p)
                 }
             }
+            // Colour chosen on the PC (synced via GlowStyle before each crossing); falls back to the teal accent.
+            val user = context.getSharedPreferences("edgestpan", Context.MODE_PRIVATE).getInt("glowColor", ElasticLine.Accent)
+            val light = Color.rgb(Color.red(user) + (255 - Color.red(user)) * 6 / 10, Color.green(user) + (255 - Color.green(user)) * 6 / 10, Color.blue(user) + (255 - Color.blue(user)) * 6 / 10)
             for (pass in 0..1) {
-                line.color = if (pass == 0) ElasticLine.Accent else Color.rgb(140, 240, 225)
+                line.color = if (pass == 0) user else light
                 val base = if (pass == 0) 9f * density else 2.4f * density
                 val peak = if (pass == 0) 70 else 255
                 var prev = point(0)

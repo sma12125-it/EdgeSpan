@@ -27,6 +27,7 @@ object PacketType {
     const val Goodbye: Byte = 0x44
     const val Lock: Byte = 0x50
     const val Unlock: Byte = 0x51
+    const val GlowStyle: Byte = 0x52
     const val HandoffOffer: Byte = 0x60
     const val HandoffAccept: Byte = 0x61
     const val HandoffGeometry: Byte = 0x62
@@ -70,7 +71,7 @@ object PacketCodec {
         PacketType.MouseButton, PacketType.MouseScroll, PacketType.KeyEvent, PacketType.Clipboard,
         PacketType.FileOffer, PacketType.FileChunk, PacketType.FileAck, PacketType.FileDone, PacketType.FileCancel,
         PacketType.EdgeEnter, PacketType.EdgeReturn, PacketType.Heartbeat, PacketType.Ping,
-        PacketType.Pong, PacketType.Ack, PacketType.Goodbye, PacketType.Lock, PacketType.Unlock,
+        PacketType.Pong, PacketType.Ack, PacketType.Goodbye, PacketType.Lock, PacketType.Unlock, PacketType.GlowStyle,
         PacketType.HandoffOffer, PacketType.HandoffAccept, PacketType.HandoffGeometry, PacketType.HandoffInput,
         PacketType.HandoffState, PacketType.HandoffReturn, PacketType.HandoffVideoConfig, PacketType.HandoffClock
     )

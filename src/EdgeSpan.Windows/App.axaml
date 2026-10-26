@@ -53,6 +53,7 @@
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>
     <FluentTheme>
       <FluentTheme.Palettes>
         <ColorPaletteResources x:Key="Light" Accent="#3B6CFF"/>

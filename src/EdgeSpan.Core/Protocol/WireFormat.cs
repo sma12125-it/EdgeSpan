@@ -30,6 +30,8 @@ public enum PacketType : byte
     Goodbye = 0x44,
     Lock = 0x50,
     Unlock = 0x51,
+    /// <summary>Edge-effect style for the device: R, G, B, intensity (0-100). Sent before every EdgeEnter so changes apply live.</summary>
+    GlowStyle = 0x52,
     HandoffOffer = 0x60,
     HandoffAccept = 0x61,
     HandoffGeometry = 0x62,

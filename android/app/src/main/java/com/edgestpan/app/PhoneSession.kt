@@ -638,6 +638,7 @@ class PhoneSession(
                     is ClientEvent.HandoffGeometry -> viewer.geometry(event)
                     is ClientEvent.HandoffState -> viewer.state(event)
                     is ClientEvent.HandoffReturned -> viewer.returned(event)
+                    is ClientEvent.GlowStyle -> prefs.edit().putInt("glowColor", event.argb).putInt("glowIntensity", event.intensity).apply()
                     is ClientEvent.HostHello -> {
                         if ((event.caps and 0x08) != 0 && wantsHandoff(prefs)) engine.setHandoffPc(true)
                         prefs.edit().putInt("hostLicense", event.license).putInt("hostLicenseDays", event.days).apply()

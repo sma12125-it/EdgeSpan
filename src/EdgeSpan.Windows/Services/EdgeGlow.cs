@@ -313,8 +313,8 @@ public sealed class EdgeGlow : IDisposable
         var thickPx = Math.Max(1, vertical ? _width : _height);
         var lineCore = 2.2 * _dpiScale / thickPx;
         var lineHalo = 9.0 * _dpiScale / thickPx;
-        double ar = (ElasticLine.Accent >> 16) & 0xFF, ag = (ElasticLine.Accent >> 8) & 0xFF, ab = ElasticLine.Accent & 0xFF;
-        _ = (r, g, b);
+        // The user's line colour (Settings > edge effect) - previously ignored in favour of the fixed teal accent.
+        double ar = r, ag = g, ab = b;
         var n = vertical ? _height : _width;
         if (_linePos.Length != n)
         {

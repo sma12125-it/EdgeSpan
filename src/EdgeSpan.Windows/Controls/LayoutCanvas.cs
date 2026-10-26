@@ -262,6 +262,38 @@ public sealed class LayoutCanvas : Control
                 context.DrawRectangle(null, accent, mapped.Deflate(1), 6, 6);
             Label(context, mapped, number.ToString(System.Globalization.CultureInfo.InvariantCulture), d.Name, ink, muted);
         }
+        DrawCrossings(context, lay.Mons.Concat(lay.Devs.Values).ToList());
+    }
+
+    /// <summary>Green crossing line on every edge two displays share, only along the overlapping part (live while dragging).</summary>
+    private void DrawCrossings(DrawingContext context, List<Rect> rects)
+    {
+        var pen = new Pen(new SolidColorBrush(Color.Parse("#22C55E")), 3, lineCap: PenLineCap.Round);
+        const double eps = 1.5; // world units
+        for (var i = 0; i < rects.Count; i++)
+            for (var j = 0; j < rects.Count; j++)
+            {
+                if (i == j) continue;
+                var a = rects[i]; var b = rects[j];
+                if (Math.Abs(a.Right - b.X) < eps)
+                {
+                    var lo = Math.Max(a.Y, b.Y); var hi = Math.Min(a.Bottom, b.Bottom);
+                    if (hi - lo > eps)
+                    {
+                        var x = _ox + a.Right * _scale;
+                        context.DrawLine(pen, new Point(x, _oy + lo * _scale + 4), new Point(x, _oy + hi * _scale - 4));
+                    }
+                }
+                if (Math.Abs(a.Bottom - b.Y) < eps)
+                {
+                    var lo = Math.Max(a.X, b.X); var hi = Math.Min(a.Right, b.Right);
+                    if (hi - lo > eps)
+                    {
+                        var y = _oy + a.Bottom * _scale;
+                        context.DrawLine(pen, new Point(_ox + lo * _scale + 4, y), new Point(_ox + hi * _scale - 4, y));
+                    }
+                }
+            }
     }
 
     private (Rect[] Mons, Dictionary<string, Rect> Devs)? _rest;

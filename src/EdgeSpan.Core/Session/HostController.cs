@@ -1357,6 +1357,7 @@ public sealed class HostController : IDisposable
         if (link != null)
         {
             link.Session?.ClearMouse();
+            SendReliable(link, PacketType.GlowStyle, Payloads.GlowStyle(Settings.EdgeGlowColor, Settings.EdgeGlowIntensity));
             SendReliable(link, PacketType.EdgeEnter, Payloads.EdgeEnter((byte)entered.ReturnEdge, entered.X, entered.Y, (ushort)Math.Clamp(entered.DevW, 1, 65535), (ushort)Math.Clamp(entered.DevH, 1, 65535)));
             SendFast(link, PacketType.MouseMove, Payloads.MouseMove(entered.X, entered.Y));
             ReleaseModifiers(link, includeHeldKeys: false);

@@ -18,6 +18,7 @@ sealed class ClientEvent {
     data class HandoffState(val id: Long, val value: Int) : ClientEvent()
     data class HandoffReturned(val id: Long) : ClientEvent()
     data class HandoffRejected(val id: Long, val reason: String) : ClientEvent()
+    data class GlowStyle(val argb: Int, val intensity: Int) : ClientEvent()
     data class HostHello(val caps: Int, val license: Int, val days: Int) : ClientEvent()
 }
 
@@ -265,6 +266,10 @@ class ClientEngine(
             PacketType.FileDone -> Payloads.readFileDone(body)?.let { onEvent(ClientEvent.FileDone(it.first, it.second)) }
             PacketType.Lock -> { locked = true; onEvent(ClientEvent.Locked(true)) }
             PacketType.Unlock -> { locked = false; onEvent(ClientEvent.Locked(false)) }
+            PacketType.GlowStyle -> if (body.size >= 4) {
+                val argb = (0xFF shl 24) or ((body[0].toInt() and 0xFF) shl 16) or ((body[1].toInt() and 0xFF) shl 8) or (body[2].toInt() and 0xFF)
+                onEvent(ClientEvent.GlowStyle(argb, body[3].toInt() and 0xFF))
+            }
             PacketType.Hello -> if (body.size >= 2) {
                 peerCaps = body.u8(1)
                 val license = Payloads.hostLicense(body)

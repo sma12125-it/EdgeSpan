@@ -65,6 +65,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _runtime = runtime;
         _boundPort = runtime.Host.Settings.ListenPort;
         RestartCommand = new RelayCommand(RestartApp);
+        PickGlowColorCommand = new RelayCommand<string>(hex => { if (!string.IsNullOrEmpty(hex)) EdgeGlowColor = hex; });
         _autosave = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         _autosave.Tick += (_, _) => AutosaveTick();
         _autosave.Start();
@@ -453,7 +454,28 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool HotkeySwitchEnabled { get; set; } = true;
     public bool DeviceNumberHotkeys { get; set; } = true;
     public bool EdgeGlowEnabled { get; set; } = true;
-    public string EdgeGlowColor { get; set; } = "#3DDC84";
+    private string _glowHex = "#3DDC84";
+    public string EdgeGlowColor
+    {
+        get => _glowHex;
+        set
+        {
+            if (_glowHex == value) return;
+            _glowHex = value;
+            Notify(nameof(EdgeGlowColor));
+            Notify(nameof(GlowColorValue));
+        }
+    }
+
+    /// <summary>Colour picker binding (hue/saturation spectrum); writes the hex that is auto-saved and applied live.</summary>
+    public Avalonia.Media.Color GlowColorValue
+    {
+        get => Avalonia.Media.Color.TryParse(_glowHex, out var c) ? c : Avalonia.Media.Color.Parse("#3DDC84");
+        set => EdgeGlowColor = $"#{value.R:X2}{value.G:X2}{value.B:X2}";
+    }
+
+    public static IReadOnlyList<string> GlowSwatches { get; } = new[] { "#14B8A6", "#3DDC84", "#22C55E", "#3B6CFF", "#60CDFF", "#A855F7", "#EC4899", "#EF4444", "#F59E0B", "#FFFFFF" };
+    public RelayCommand<string> PickGlowColorCommand { get; } = null!;
     public decimal? EdgeGlowIntensity { get; set; } = 80;
     public decimal? EdgeGlowThickness { get; set; } = 22;
     public bool BreakthroughEnabled { get; set; } = true;
