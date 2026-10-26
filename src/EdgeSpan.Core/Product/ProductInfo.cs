@@ -6,8 +6,8 @@ public static class ProductInfo
     // Derived from <Version> in Directory.Build.props so the UI, diagnostics and installer never disagree.
     public static readonly string Version =
         (System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(ProductInfo).Assembly)
-            ?.InformationalVersion ?? "0.9.17").Split('+')[0];
-    public const int VersionCode = 36;
+            ?.InformationalVersion ?? "0.9.18").Split('+')[0];
+    public const int VersionCode = 37;
     public const string BuildDate = "2026-10-26";
     public const int ProtocolVersion = 1;
     public const int DiscoveryPort = 45454;
@@ -16,6 +16,8 @@ public static class ProductInfo
     public const int RelayUdpPort = 8788;
     public const int AdbServerPort = 27183;
     public const int HandoffPort = 27184;
+    /// <summary>Android app to Windows window stream (phone dials the PC; over USB through adb reverse).</summary>
+    public const int AppStreamPort = 27186;
     public const byte HandoffCapability = 0x08;
     public const string SamsungUsbDriverUrl = "https://developer.samsung.com/android-usb-driver";
     public const int MaxClipboardBytes = 256 * 1024;

@@ -242,6 +242,8 @@ public sealed class UsbConductor
         Note("usb-reverse " + serial);
         var video = await Call(adb, token, "-s", serial, "reverse", "tcp:" + Product.ProductInfo.HandoffPort, "tcp:" + Product.ProductInfo.HandoffPort);
         Note(video.Code == 0 && !video.TimedOut ? "usb-video-reverse" : "usb-video-reverse-failed " + First(video.Text));
+        var apps = await Call(adb, token, "-s", serial, "reverse", "tcp:" + Product.ProductInfo.AppStreamPort, "tcp:" + Product.ProductInfo.AppStreamPort);
+        Note(apps.Code == 0 && !apps.TimedOut ? "usb-appstream-reverse" : "usb-appstream-reverse-failed " + First(apps.Text));
         Phase(Busy("connecting"), "usbStepForward");
         var forward = await Call(adb, token, "-s", serial, "forward", "tcp:" + Product.ProductInfo.AdbServerPort, "tcp:" + Product.ProductInfo.AdbServerPort);
         if (forward.Code != 0 || forward.TimedOut)
@@ -425,6 +427,7 @@ public sealed class UsbConductor
         var video = Product.ProductInfo.HandoffPort.ToString();
         await Call(adb, token, "-s", serial, "reverse", "--remove", "tcp:" + port);
         await Call(adb, token, "-s", serial, "reverse", "--remove", "tcp:" + video);
+        await Call(adb, token, "-s", serial, "reverse", "--remove", "tcp:" + Product.ProductInfo.AppStreamPort);
         await Call(adb, token, "-s", serial, "forward", "--remove", "tcp:" + inject);
     }
 

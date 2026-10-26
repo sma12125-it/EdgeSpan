@@ -137,6 +137,7 @@ class SessionCipher(private val sendKey: ByteArray, private val recvKey: ByteArr
     val lastSequence get() = seq
 
     fun mediaReceiveKey() = SessionCrypto.hkdf(recvKey, prefix, SessionCrypto.MediaInfo, 32)
+    fun mediaSendKey() = SessionCrypto.hkdf(sendKey, prefix, SessionCrypto.MediaInfo, 32)
 
     init {
         require(sessionId != 0L)

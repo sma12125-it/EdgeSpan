@@ -377,5 +377,20 @@
   "scaleResolution": {"en": "By resolution", "fa": "براساس رزولوشن"},
   "scaleUniform": {"en": "Uniform (1:1)", "fa": "یکسان (۱:۱)"},
   "detect": {"en": "Detect", "fa": "تشخیص"},
-  "autosaveHint": {"en": "Changes are saved automatically", "fa": "تغییرات به‌طور خودکار ذخیره می‌شوند"}
+  "autosaveHint": {"en": "Changes are saved automatically", "fa": "تغییرات به‌طور خودکار ذخیره می‌شوند"},
+  "sendPcTitle": {"en": "Send an app to your PC", "fa": "ارسال یک برنامه به رایانه"},
+  "sendPcHint": {"en": "It opens in its own window on Windows. Drag that window back to this side to return it.", "fa": "در پنجرهٔ جداگانه‌ای روی ویندوز باز می‌شود. برای بازگرداندن، آن پنجره را به این سمت بکشید."},
+  "sendPcHandle": {"en": "Show the send handle on the shared edge", "fa": "نمایش دستگیرهٔ ارسال در لبهٔ مشترک"},
+  "sendPcPick": {"en": "Pick the app to send.", "fa": "برنامه‌ای را برای ارسال انتخاب کنید."},
+  "sendPcBusy": {"en": "An app is already on the PC.", "fa": "یک برنامه هم‌اکنون روی رایانه است."},
+  "sendPcFailed": {"en": "Could not reach the PC.", "fa": "اتصال به رایانه ممکن نشد."},
+  "sendPcNoLink": {"en": "Connect to the PC first (USB or Wi-Fi).", "fa": "ابتدا به رایانه وصل شوید (USB یا Wi-Fi)."},
+  "sendPcNoSource": {"en": "Could not capture the app.", "fa": "ضبط برنامه ممکن نشد."},
+  "sendPcRefused": {"en": "The PC is set not to accept apps from the phone. Turn on \"Phone to PC\" in EdgeSpan on Windows.", "fa": "رایانه برای پذیرش برنامه از گوشی تنظیم نشده است. «گوشی به رایانه» را در EdgeSpan ویندوز روشن کنید."},
+  "sendPcReturned": {"en": "The app is back on the phone.", "fa": "برنامه به گوشی برگشت."},
+  "overlayNeeded": {"en": "Allow \"display over other apps\" first.", "fa": "ابتدا اجازهٔ «نمایش روی برنامه‌های دیگر» را بدهید."},
+  "handoffPhoneLabel": {"en": "Open phone apps on this PC", "fa": "باز کردن برنامه‌های گوشی روی این رایانه"},
+  "appStreamBlocked": {"en": "This app blocks screen capture, so it can't be shown here.", "fa": "این برنامه از ضبط صفحه جلوگیری می‌کند و نمی‌توان آن را اینجا نشان داد."},
+  "appStreamWaiting": {"en": "Waiting for the phone…", "fa": "در انتظار گوشی…"},
+  "appStreamBack": {"en": "Back to phone", "fa": "بازگشت به گوشی"}
 }

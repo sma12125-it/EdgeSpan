@@ -38,6 +38,7 @@ public sealed class SessionRuntime : IDisposable
     private int _paired;
     private ClipboardWatch? _clipboard;
     private readonly HandoffHost _handoff;
+    private readonly AppStreamHost _appStream;
     private CancellationTokenSource _life = new();
     private long _lastAnnounce;
     private long _lastProbe;
@@ -135,6 +136,9 @@ public sealed class SessionRuntime : IDisposable
         Host.DragFailed = () => _handoff.CancelDrag();
         Host.SendWindowHotkey = () => Dispatcher.UIThread.Post(() => _handoff.SendForeground(ActiveMethod, useLast: false));
         _handoff.ApplySettings();
+        // Always listening so a phone gets a clear "turn it on" answer instead of a timeout when Phone to PC is off.
+        _appStream = new AppStreamHost(Host);
+        _appStream.Start();
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _timer.Tick += (_, _) => Pump();
         _timer.Start();
@@ -372,6 +376,7 @@ public sealed class SessionRuntime : IDisposable
         _life.Cancel();
         _glow.Dispose();
         _handoff.Dispose();
+        _appStream.Dispose();
         _input?.Dispose();
         _clipboard?.Dispose();
         _usb?.Dispose();

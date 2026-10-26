@@ -605,6 +605,15 @@
   </Border>
             <Border Classes="setting">
     <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 6,2 L 12,2 L 12,16 L 6,16 Z M 13,9 L 17,9 M 15,7 L 17,9 L 15,11"/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding HandoffPhoneLabel}"/>
+      </StackPanel>
+      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><ToggleSwitch IsChecked="{Binding HandoffPhone}" OnContent="" OffContent=""/></WrapPanel>
+    </Grid>
+  </Border>
+            <Border Classes="setting">
+    <Grid ColumnDefinitions="Auto,*,Auto">
       <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 9,1 A 8,8 0 1 1 8.99,1 M 9,8 L 9,13 M 9,5 L 9,5.2"/></ContentControl>
       <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
         <TextBlock Classes="title" Text="{Binding HandoffStatus}"/>

@@ -867,6 +867,12 @@ public sealed class HostController : IDisposable
                 && (l.Remote.Address.IsIPv4MappedToIPv6 ? l.Remote.Address.MapToIPv4() : l.Remote.Address).Equals(address));
     }
 
+    public byte[]? MediaReceiveKeyFor(string deviceId)
+    {
+        lock (_gate)
+            return _links.TryGetValue(deviceId, out var link) ? link.Session?.MediaReceiveKey() : null;
+    }
+
     public byte[]? MediaKeyFor(string deviceId)
     {
         lock (_gate)

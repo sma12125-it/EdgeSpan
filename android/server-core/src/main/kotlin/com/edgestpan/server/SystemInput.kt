@@ -21,6 +21,9 @@ class SystemInput {
     private var downTime = 0L
     private var lastButtons = 0
     private var meta = 0
+    /** Target display for injected events; 0 is the phone's own screen, others are app-stream virtual displays. */
+    @Volatile var display = 0
+    private val setDisplay: Method? = runCatching { inputEvent.getMethod("setDisplayId", Int::class.javaPrimitiveType) }.getOrNull()
 
     init {
         val global = runCatching { Class.forName("android.hardware.input.InputManagerGlobal") }.getOrNull()
@@ -39,6 +42,7 @@ class SystemInput {
     private fun now() = uptime.invoke(null) as Long
 
     private fun send(event: Any) {
+        if (display != 0) runCatching { setDisplay?.invoke(event, display) }
         inject.invoke(manager, event, 0) // INJECT_INPUT_EVENT_MODE_ASYNC
     }
 
@@ -106,6 +110,31 @@ class SystemInput {
         ).newInstance(t, t, if (down) 0 else 1, code, 0, meta, VIRTUAL_DEVICE, 0, 0, SOURCE_KEYBOARD)
         send(event)
     }
+
+    /** Raw Android keycode (e.g. 4 = BACK) on the current display. */
+    @Synchronized
+    fun keyCode(code: Int, down: Boolean) {
+        val t = now()
+        send(keyEvent(t, if (down) 0 else 1, code, meta))
+    }
+
+    /** Types one character through the key character map (falls back to nothing for unmapped chars). */
+    @Synchronized
+    fun char(ch: Char) {
+        runCatching {
+            val map = Class.forName("android.view.KeyCharacterMap")
+            val virtual = map.getMethod("load", Int::class.javaPrimitiveType).invoke(null, -1)
+            @Suppress("UNCHECKED_CAST")
+            val events = map.getMethod("getEvents", CharArray::class.java).invoke(virtual, charArrayOf(ch)) as Array<Any>?
+            events?.forEach { send(it) }
+        }
+    }
+
+    private fun keyEvent(t: Long, action: Int, code: Int, m: Int): Any = keyClass.getConstructor(
+        Long::class.javaPrimitiveType, Long::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+        Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+        Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
+    ).newInstance(t, t, action, code, 0, m, VIRTUAL_DEVICE, 0, 0, SOURCE_KEYBOARD)
 
     private fun flag(m: Int, bit: Int, on: Boolean) = if (on) m or bit else m and bit.inv()
 

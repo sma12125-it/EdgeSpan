@@ -73,6 +73,7 @@ class ClientEngine(
     }
 
     fun mediaReceiveKey(): ByteArray? = cipher?.mediaReceiveKey()
+    fun mediaSendKey(): ByteArray? = cipher?.mediaSendKey()
 
     fun startPairing(pin: String) {
         pairing = PairingHandshake.client(pin)

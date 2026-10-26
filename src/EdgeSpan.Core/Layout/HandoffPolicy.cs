@@ -10,6 +10,18 @@ public static class HandoffPolicy
     public const int PastEdgePx = 80;
 
     public static bool AllowsPcToPhone(string? mode) => mode is "pc" or "both";
+    /// <summary>Android apps may be sent to this PC ("phone" or "both").</summary>
+    public static bool AllowsPhoneToPc(string? mode) => mode is "phone" or "both";
+
+    /// <summary>Combines the two toggles into the stored Handoff value.</summary>
+    public static string Combine(bool pcToPhone, bool phoneToPc) =>
+        pcToPhone && phoneToPc ? "both" : pcToPhone ? "pc" : phoneToPc ? "phone" : "off";
+
+    /// <summary>
+    /// Decoded frame looks like a capture-blocked (FLAG_SECURE) surface: nearly uniform and near black.
+    /// <paramref name="mean"/> and <paramref name="spread"/> are luma statistics (0..255).
+    /// </summary>
+    public static bool LooksBlocked(double mean, double spread) => mean < 18 && spread < 6;
 
     public static bool ShouldStart(bool dragging, bool ownWindow, bool pointerOnDevice, int windowPastEdgePx) =>
         dragging && !ownWindow && (pointerOnDevice || windowPastEdgePx >= PastEdgePx);

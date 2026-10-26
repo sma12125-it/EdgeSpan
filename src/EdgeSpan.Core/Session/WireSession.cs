@@ -31,6 +31,7 @@ public sealed class WireSession
     public bool IsHost => _isHost;
     public bool Established => _cipher != null;
     public byte[]? MediaSendKey() => _cipher?.MediaSendKey();
+    public byte[]? MediaReceiveKey() => _cipher?.MediaReceiveKey();
     public uint SessionId => _cipher?.SessionId ?? 0;
     public double? LastRttMs { get; private set; }
 

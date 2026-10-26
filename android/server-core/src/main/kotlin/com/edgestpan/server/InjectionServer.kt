@@ -246,6 +246,8 @@ object ServerMain {
         }
         println("edgestpan-server mouse-relative $port uhid=$uhidOk inputmanager=${system != null}")
         InjectionServer(mouse, keyboard, port, system = system, uhidOk = uhidOk).start()
+        // "Send to PC": virtual display + MediaCodec. Needs the platform classes, so failures stay contained.
+        runCatching { AppStreamServer(port + 2).start() }.onFailure { println("edgestpan-server appstream-unavailable $it") }
         Thread.currentThread().join()
     }
 }

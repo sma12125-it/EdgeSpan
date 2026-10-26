@@ -603,6 +603,10 @@ class PhoneSession(
             glow.onFinger = { EdgeGlowOverlay.serverFinger() }
             engine.setHandoffPc(wantsHandoff(prefs))
             val lang = prefs.getString("lang", "en") ?: "en"
+            AppLink.engine = engine
+            AppLink.method = if (viaRelay) "relay" else method
+            AppLink.host = { if (viaRelay) null else peerHost() }
+            SendHandle.refresh(context)
             val viewer = HandoffViewer(context, engine, method, loadStrings(lang), { flush() }, { key ->
                 handoffFailed(prefs, lang, key)
             }, { if (viaRelay) null else peerHost() })
@@ -751,6 +755,8 @@ class PhoneSession(
             }
             injector.releaseModifiers()
             viewer.close()
+            if (AppLink.engine === engine) { AppLink.engine = null; AppLink.host = { null } }
+            SendHandle.refresh(context)
             glow.close()
             injector.close()
             counter.close()
