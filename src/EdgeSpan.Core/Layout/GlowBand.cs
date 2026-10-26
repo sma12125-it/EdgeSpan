@@ -43,6 +43,26 @@ public readonly record struct GlowBand(int X, int Y, int Width, int Height, Glow
         };
     }
 
+    /// <summary>Clips a band to its monitor so the line is drawn only on the overlapping part of the edge.</summary>
+    public GlowBand ClipTo(HostMonitor m)
+    {
+        var x1 = Math.Max(X, m.X);
+        var y1 = Math.Max(Y, m.Y);
+        var x2 = Math.Min(X + Width, m.Right);
+        var y2 = Math.Min(Y + Height, m.Bottom);
+        return x2 <= x1 || y2 <= y1 ? this : new GlowBand(x1, y1, x2 - x1, y2 - y1, Edge);
+    }
+
+    /// <summary>The same band mirrored onto the neighbouring monitor's facing edge (device between monitors).</summary>
+    public GlowBand Facing(HostMonitor next) => Edge switch
+    {
+        GlowEdge.Right => new GlowBand(next.X, Y, Width, Height, GlowEdge.Left).ClipTo(next),
+        GlowEdge.Left => new GlowBand(next.Right - Width, Y, Width, Height, GlowEdge.Right).ClipTo(next),
+        GlowEdge.Bottom => new GlowBand(X, next.Y, Width, Height, GlowEdge.Top).ClipTo(next),
+        GlowEdge.Top => new GlowBand(X, next.Bottom - Height, Width, Height, GlowEdge.Bottom).ClipTo(next),
+        _ => this
+    };
+
     public static (byte R, byte G, byte B) ParseColor(string? hex)
     {
         var text = (hex ?? "").Trim();

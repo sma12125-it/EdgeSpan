@@ -31,7 +31,8 @@ public sealed record DeviceSnapshot(
     int OffsetPx,
     int SpanPx,
     int CornerSizePx,
-    double PointerSpeed);
+    double PointerSpeed,
+    string Monitor = "");
 
 public abstract record Effect
 {
@@ -146,6 +147,7 @@ public sealed class HostController : IDisposable
         _settingsPath = settingsPath;
         if (string.IsNullOrWhiteSpace(Settings.HostId))
             Settings.HostId = Guid.NewGuid().ToString("N");
+        PruneDevices(Settings);
         foreach (var device in Settings.Devices)
         {
             var link = new Link { Config = device, Status = "saved" };
@@ -171,6 +173,65 @@ public sealed class HostController : IDisposable
     public List<string> SnapshotLogs()
     {
         lock (_gate) return _logs.ToList();
+    }
+
+    /// <summary>Key of the current monitor configuration (ids + rects), used to persist layouts per setup.</summary>
+    public string MonitorKey { get; private set; } = "";
+
+    public IReadOnlyList<HostMonitor> SnapshotMonitors()
+    {
+        lock (_gate) return Machine.Monitors.ToList();
+    }
+
+    /// <summary>
+    /// Updates the Windows monitor list (virtual-desktop physical pixels). When the configuration changes
+    /// (plugged/unplugged/moved) each device restores its layout saved for that configuration, if any; a
+    /// device whose monitor disappeared falls back to the primary monitor.
+    /// </summary>
+    public void SetHostMonitors(IReadOnlyList<HostMonitor> monitors)
+    {
+        lock (_gate)
+        {
+            if (monitors.Count == 0)
+                return;
+            var key = KeyFor(monitors);
+            if (key == MonitorKey)
+                return;
+            MonitorKey = "";
+            Machine.SetMonitors(monitors);
+            foreach (var d in Settings.Devices)
+            {
+                if (d.Layouts.TryGetValue(key, out var saved))
+                    ApplySaved(d, saved);
+                else if (d.Monitor.Length > 0 && monitors.All(m => m.Id != d.Monitor))
+                {
+                    var text = $"monitor {d.Monitor} missing; {d.Name} falls back to the primary monitor";
+                    _logs.Add(text);
+                    _effects.Add(new Effect.Log(text));
+                }
+            }
+            MonitorKey = key;
+            ReloadLayout();
+            Touch();
+        }
+    }
+
+    public static string KeyFor(IReadOnlyList<HostMonitor> monitors) =>
+        string.Join(";", monitors.OrderBy(m => m.Id, StringComparer.Ordinal).Select(m => $"{m.Id}@{m.X},{m.Y},{m.W}x{m.H}"));
+
+    private static string Saved(DeviceConfig d) => $"{d.Monitor}|{d.PcEdge}|{d.Anchor}|{d.Corner}|{d.OffsetPx}";
+
+    private static void ApplySaved(DeviceConfig d, string saved)
+    {
+        var p = saved.Split('|');
+        if (p.Length != 5 || !int.TryParse(p[4], out var offset))
+            return;
+        d.Monitor = p[0];
+        d.PcEdge = p[1];
+        d.ReturnEdge = p[1] switch { "Left" => "Right", "Right" => "Left", "Top" => "Bottom", _ => "Top" };
+        d.Anchor = p[2];
+        d.Corner = p[3];
+        d.OffsetPx = offset;
     }
 
     public void SetHostScreen(int originX, int originY, int width, int height)
@@ -284,6 +345,7 @@ public sealed class HostController : IDisposable
             existing.Name = incoming.Name;
             existing.Address = incoming.Address;
             existing.Port = incoming.Port;
+            existing.Monitor = incoming.Monitor ?? "";
             existing.PcEdge = incoming.PcEdge;
             existing.ReturnEdge = incoming.ReturnEdge;
             existing.Anchor = incoming.Anchor;
@@ -1084,7 +1146,8 @@ public sealed class HostController : IDisposable
                 link.Config.OffsetPx,
                 link.Config.SpanPx,
                 link.Config.CornerSizePx,
-                link.Config.PointerSpeed)).ToList();
+                link.Config.PointerSpeed,
+                link.Config.Monitor)).ToList();
         }
     }
 
@@ -1591,6 +1654,28 @@ public sealed class HostController : IDisposable
         _out.Add(new Outbound(link.Config.Id, dest, packet, link.RelayPeer));
     }
 
+    /// <summary>
+    /// Removes duplicate ids and the placeholder "Android" entries that a pairing attempt left behind
+    /// (created at PairInit with no address and never completed), so only real devices are listed.
+    /// </summary>
+    public static int PruneDevices(AppSettings settings)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var removed = 0;
+        for (var i = 0; i < settings.Devices.Count; i++)
+        {
+            var d = settings.Devices[i];
+            var placeholder = string.Equals(d.Name, "Android", StringComparison.Ordinal) && string.IsNullOrWhiteSpace(d.Address)
+                && settings.Devices.Count > 1;
+            if (string.IsNullOrWhiteSpace(d.Id) || !seen.Add(d.Id) || placeholder)
+            {
+                settings.Devices.RemoveAt(i--);
+                removed++;
+            }
+        }
+        return removed;
+    }
+
     private Link EnsureLink(string id, string name, IPEndPoint from, string? relayPeer)
     {
         if (_links.TryGetValue(id, out var existing))
@@ -1599,6 +1684,24 @@ public sealed class HostController : IDisposable
             if (!string.IsNullOrWhiteSpace(name))
                 existing.Config.Name = name;
             return existing;
+        }
+        // Same tablet with a new id (reinstall / cleared data) or a stale placeholder: adopt that entry
+        // instead of adding a second "Android" device, keeping its arrangement.
+        var stale = Settings.Devices.FirstOrDefault(d =>
+            (string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase) || string.Equals(d.Name, "Android", StringComparison.Ordinal))
+            && !(_links.TryGetValue(d.Id, out var l) && l.Session?.Established == true));
+        if (stale != null && _links.Remove(stale.Id, out var old))
+        {
+            old.Pairing?.Dispose();
+            stale.Id = id;
+            if (!string.IsNullOrWhiteSpace(name))
+                stale.Name = name;
+            var adopted = new Link { Config = stale, Status = "pairing" };
+            RememberRoute(adopted, from, relayPeer);
+            _links[id] = adopted;
+            AttachStaged(adopted, id);
+            ReloadLayout();
+            return adopted;
         }
         var edge = NextFreeEdge();
         var usable = Usable(from);
@@ -1691,6 +1794,9 @@ public sealed class HostController : IDisposable
 
     private void ReloadLayout()
     {
+        if (MonitorKey.Length > 0)
+            foreach (var d in Settings.Devices)
+                d.Layouts[MonitorKey] = Saved(d);
         var placements = new List<DevicePlacement>();
         foreach (var device in Settings.Devices)
         {

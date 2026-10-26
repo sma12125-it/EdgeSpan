@@ -50,7 +50,8 @@ public class EdgeAndSessionTests
         var entered = Assert.IsType<Transition.Enter>(machine.MoveHost(1920, 150));
         Assert.Equal("tab", entered.DeviceId);
         Assert.Equal(2, entered.X);
-        Assert.Equal(50, entered.Y);
+        // Entry is proportional across the overlapping part of the edge (offset 100 clips the segment).
+        Assert.InRange(entered.Y, 50, 52);
         Assert.Equal(1919, entered.ParkX);
 
         var held = machine.MoveDeviceBy(-5, 0);

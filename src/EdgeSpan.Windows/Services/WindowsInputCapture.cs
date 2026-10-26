@@ -550,7 +550,53 @@ public sealed class WindowsInputCapture : IDisposable
         var h = GetSystemMetrics(79);
         if (w > 0 && h > 0)
             _host.SetHostScreen(x, y, w, h);
+        var monitors = EnumerateMonitors();
+        if (monitors.Count > 0)
+            _host.SetHostMonitors(monitors);
     }
+
+    /// <summary>All monitors in virtual-desktop physical pixels (process is PerMonitorV2), with per-monitor DPI.</summary>
+    public static List<EdgeSpan.Layout.HostMonitor> EnumerateMonitors()
+    {
+        var list = new List<EdgeSpan.Layout.HostMonitor>();
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (handle, _, _, _) =>
+        {
+            var info = new MonitorInfoEx { cbSize = Marshal.SizeOf<MonitorInfoEx>() };
+            if (GetMonitorInfo(handle, ref info))
+            {
+                var dpi = GetDpiForMonitor(handle, 0, out var dx, out _) == 0 && dx >= 48 ? (int)dx : 96;
+                var r = info.rcMonitor;
+                list.Add(new EdgeSpan.Layout.HostMonitor(info.szDevice, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top, dpi, (info.dwFlags & 1) != 0));
+            }
+            return true;
+        }, IntPtr.Zero);
+        return list;
+    }
+
+    private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr rect, IntPtr data);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonRect { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct MonitorInfoEx
+    {
+        public int cbSize;
+        public MonRect rcMonitor;
+        public MonRect rcWork;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfoEx info);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
 
     private static bool Down(int virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
 

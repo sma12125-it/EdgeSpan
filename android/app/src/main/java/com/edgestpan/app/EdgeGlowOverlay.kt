@@ -274,36 +274,14 @@ class EdgeGlowOverlay(private val app: Context) {
             val horizontal = edge == ScreenEdge.Top || edge == ScreenEdge.Bottom
             val thick = (if (horizontal) height else width).toFloat()
             val density = resources.displayMetrics.density
-            // Static band: a faint gradient sitting on the shared edge.
-            val solid = Color.argb(if (crossing) 70 else 150, 20, 184, 166)
-            val clear = Color.argb(0, 20, 184, 166)
-            val bandDepth = if (horizontal) height * 0.35f else width * 0.35f
-            paint.shader = when (edge) {
-                ScreenEdge.Right -> LinearGradient(width.toFloat(), 0f, width - bandDepth, 0f, solid, clear, Shader.TileMode.CLAMP)
-                ScreenEdge.Bottom -> LinearGradient(0f, height.toFloat(), 0f, height - bandDepth, solid, clear, Shader.TileMode.CLAMP)
-                ScreenEdge.Top -> LinearGradient(0f, 0f, 0f, bandDepth, solid, clear, Shader.TileMode.CLAMP)
-                else -> LinearGradient(0f, 0f, bandDepth, 0f, solid, clear, Shader.TileMode.CLAMP)
-            }
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-            if (!crossing) {
-                line.color = ElasticLine.Accent
-                line.alpha = 210
-                line.strokeWidth = 2.5f * density
-                val inset = line.strokeWidth / 2
-                when (edge) {
-                    ScreenEdge.Right -> canvas.drawLine(width - inset, 0f, width - inset, height.toFloat(), line)
-                    ScreenEdge.Bottom -> canvas.drawLine(0f, height - inset, width.toFloat(), height - inset, line)
-                    ScreenEdge.Top -> canvas.drawLine(0f, inset, width.toFloat(), inset, line)
-                    else -> canvas.drawLine(inset, 0f, inset, height.toFloat(), line)
-                }
-                return
-            }
-            val rest = if (mode == ElasticLine.EXIT) 0.30 else 0.05
+            // Only the elastic line (no gradient band). Its baseline is centred on the exact edge pixel
+            // (offset 0, no inset); the outer half of the stroke is clipped by the screen edge. On exit only the
+            // Gaussian segment at the crossing deforms, outward: drawn as the line thinning there (tip clipped).
             val n = 160
             val long = (if (horizontal) width else height).toFloat()
             fun point(i: Int): Pair<Float, Float> {
                 val a = i / n.toDouble()
-                val d = ((rest + ElasticLine.displacement(mode, a, along, ms)) * thick).toFloat()
+                val d = if (crossing) (ElasticLine.offset(mode, a, along, ms) * thick).toFloat() else 0f
                 val p = (a * long).toFloat()
                 return when (edge) {
                     ScreenEdge.Right -> Pair(width - d, p)
@@ -312,16 +290,18 @@ class EdgeGlowOverlay(private val app: Context) {
                     else -> Pair(d, p)
                 }
             }
-            // Two passes: wide soft halo, then a bright core. Segment alpha carries the tear gap.
             for (pass in 0..1) {
                 line.color = if (pass == 0) ElasticLine.Accent else Color.rgb(140, 240, 225)
-                line.strokeWidth = if (pass == 0) 9f * density else 2.4f * density
+                val base = if (pass == 0) 9f * density else 2.4f * density
                 val peak = if (pass == 0) 70 else 255
                 var prev = point(0)
                 for (i in 1..n) {
                     val next = point(i)
-                    val op = ElasticLine.opacity(mode, (i - 0.5) / n, along, ms)
+                    val mid = (i - 0.5) / n
+                    val op = if (crossing) ElasticLine.opacity(mode, mid, along, ms) else 0.85
+                    val w = if (crossing) ElasticLine.thickness(mode, mid, along, ms) else 1.0
                     if (op > 0.01) {
+                        line.strokeWidth = (base * w).toFloat()
                         line.alpha = (peak * op).toInt().coerceIn(0, 255)
                         canvas.drawLine(prev.first, prev.second, next.first, next.second, line)
                     }

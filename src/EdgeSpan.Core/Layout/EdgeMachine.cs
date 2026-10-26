@@ -24,8 +24,18 @@ public enum ScreenCorner
     BottomRight = 3
 }
 
+/// <summary>One Windows monitor in virtual-desktop physical pixels (per-monitor DPI aware process).</summary>
+public sealed record HostMonitor(string Id, int X, int Y, int W, int H, int Dpi = 96, bool Primary = false)
+{
+    public int Right => X + W;
+    public int Bottom => Y + H;
+    public bool Contains(int x, int y) => x >= X && x < X + W && y >= Y && y < Y + H;
+}
+
 public sealed class DevicePlacement
 {
+    /// <summary>Monitor the device is attached to; empty or unknown falls back to the primary monitor.</summary>
+    public string MonitorId { get; init; } = "";
     public required string Id { get; init; }
     public required string Name { get; init; }
     public ScreenEdge PcEdge { get; init; }
@@ -45,7 +55,7 @@ public abstract record Transition
     public sealed record Stay(int X, int Y) : Transition;
     public sealed record Blocked(int X, int Y) : Transition;
     public sealed record Enter(string DeviceId, int X, int Y, ScreenEdge ReturnEdge, int DevW, int DevH, int ParkX, int ParkY) : Transition;
-    public sealed record Return(int HostX, int HostY, int DeviceX, int DeviceY) : Transition;
+    public sealed record Return(int HostX, int HostY, int DeviceX, int DeviceY, string? MonitorId = null, bool Through = false) : Transition;
 }
 
 public static class EdgeGuard
@@ -94,6 +104,7 @@ public static class PlacementParser
         placement = new DevicePlacement
         {
             Id = config.Id,
+            MonitorId = config.Monitor ?? "",
             Name = string.IsNullOrWhiteSpace(config.Name) ? "Android" : config.Name,
             PcEdge = pc,
             ReturnEdge = ret,
@@ -120,7 +131,7 @@ public static class PlacementParser
                 var b = devices[j];
                 if (a.Anchor == AnchorKind.Corner && b.Anchor == AnchorKind.Corner && a.Corner == b.Corner)
                     problems.Add($"corner:{a.Id}:{b.Id}");
-                if (a.Anchor == AnchorKind.Edge && b.Anchor == AnchorKind.Edge && a.PcEdge == b.PcEdge && RangesOverlap(a, b))
+                if (a.Anchor == AnchorKind.Edge && b.Anchor == AnchorKind.Edge && a.PcEdge == b.PcEdge && a.MonitorId == b.MonitorId && RangesOverlap(a, b))
                     problems.Add($"overlap:{a.Id}:{b.Id}");
             }
         }
@@ -210,6 +221,7 @@ public static class PlacementParser
 public sealed class EdgeMachine
 {
     private readonly List<DevicePlacement> _devices = new();
+    private readonly List<HostMonitor> _monitors = new();
     private double _subX;
     private double _subY;
 
@@ -223,6 +235,90 @@ public sealed class EdgeMachine
     public int Y { get; private set; }
     public bool ReturnArmed { get; private set; }
     public IReadOnlyList<DevicePlacement> Devices => _devices;
+
+    /// <summary>Explicit monitors; when none were set the whole SetScreen rect acts as one primary monitor.</summary>
+    public IReadOnlyList<HostMonitor> Monitors => _monitors.Count > 0
+        ? _monitors
+        : new[] { new HostMonitor("", OriginX, OriginY, ScreenW, ScreenH, 96, true) };
+
+    public void SetMonitors(IReadOnlyList<HostMonitor> monitors)
+    {
+        _monitors.Clear();
+        _monitors.AddRange(monitors.Where(m => m.W > 0 && m.H > 0));
+        if (_monitors.Count == 0)
+            return;
+        var left = _monitors.Min(m => m.X);
+        var top = _monitors.Min(m => m.Y);
+        SetScreen(left, top, _monitors.Max(m => m.Right) - left, _monitors.Max(m => m.Bottom) - top);
+        if (ActiveDeviceId == null)
+            (X, Y) = ClampHost(X, Y, X, Y);
+    }
+
+    /// <summary>Monitor a device is attached to; unknown ids (unplugged) fall back to the primary.</summary>
+    public HostMonitor MonitorFor(DevicePlacement device)
+    {
+        var all = Monitors;
+        foreach (var m in all)
+            if (device.MonitorId.Length > 0 && m.Id == device.MonitorId)
+                return m;
+        return all.FirstOrDefault(m => m.Primary) ?? all[0];
+    }
+
+    /// <summary>
+    /// The monitor directly across the device's attach edge (the device sits BETWEEN two monitors).
+    /// Leaving the device's far side then lands on this monitor's facing edge.
+    /// </summary>
+    public HostMonitor? NeighborFor(DevicePlacement device)
+    {
+        if (device.Anchor != AnchorKind.Edge)
+            return null;
+        var m = MonitorFor(device);
+        var (lo, hi) = Segment(device, m);
+        foreach (var n in Monitors)
+        {
+            if (n == m)
+                continue;
+            var touches = device.PcEdge switch
+            {
+                ScreenEdge.Right => n.X == m.Right && n.Y < hi && n.Bottom > lo,
+                ScreenEdge.Left => n.Right == m.X && n.Y < hi && n.Bottom > lo,
+                ScreenEdge.Bottom => n.Y == m.Bottom && n.X < hi && n.Right > lo,
+                _ => n.Bottom == m.Y && n.X < hi && n.Right > lo
+            };
+            if (touches)
+                return n;
+        }
+        return null;
+    }
+
+    /// <summary>Absolute [lo, hi) of the crossing zone along the attach edge, clipped to the monitor.</summary>
+    public (int Lo, int Hi) Segment(DevicePlacement device, HostMonitor m)
+    {
+        var vertical = device.PcEdge is ScreenEdge.Left or ScreenEdge.Right;
+        var start = vertical ? m.Y : m.X;
+        var len = vertical ? m.H : m.W;
+        var lo = start + Math.Clamp(device.OffsetPx, 0, Math.Max(0, len - 1));
+        var hi = Math.Min(start + len, lo + EffectiveSpan(device));
+        return (lo, hi);
+    }
+
+    private (int X, int Y) ClampHost(int x, int y, int fromX, int fromY)
+    {
+        var all = Monitors;
+        foreach (var m in all)
+            if (m.Contains(x, y))
+                return (x, y);
+        var home = all.FirstOrDefault(m => m.Contains(fromX, fromY))
+            ?? all.OrderBy(m => Dist(m, x, y)).First();
+        return (Clamp(x, home.X, home.Right - 1), Clamp(y, home.Y, home.Bottom - 1));
+    }
+
+    private static long Dist(HostMonitor m, int x, int y)
+    {
+        long dx = x < m.X ? m.X - x : x >= m.Right ? x - m.Right + 1 : 0;
+        long dy = y < m.Y ? m.Y - y : y >= m.Bottom ? y - m.Bottom + 1 : 0;
+        return dx * dx + dy * dy;
+    }
 
     public void SetScreen(int originX, int originY, int width, int height)
     {
@@ -261,8 +357,7 @@ public sealed class EdgeMachine
     {
         if (ActiveDeviceId != null)
             return new Transition.Stay(X, Y);
-        var cx = Clamp(x, OriginX, OriginX + ScreenW - 1);
-        var cy = Clamp(y, OriginY, OriginY + ScreenH - 1);
+        var (cx, cy) = ClampHost(x, y, X, Y);
         if (Locked)
         {
             X = cx;
@@ -311,7 +406,19 @@ public sealed class EdgeMachine
             _subX = _subY = 0;
             X = hostX;
             Y = hostY;
-            return new Transition.Return(hostX, hostY, nx, ny);
+            return new Transition.Return(hostX, hostY, nx, ny, MonitorFor(device).Id);
+        }
+        // Device between two monitors: its far side continues onto the neighbour's facing edge.
+        if (!Locked && NeighborFor(device) is { } next
+            && EdgeGuard.Crosses(Opposite(device.ReturnEdge), nx, ny, device.ScreenWidth, device.ScreenHeight))
+        {
+            MapThrough(device, next, X, Y, out var hostX, out var hostY);
+            ActiveDeviceId = null;
+            ReturnArmed = false;
+            _subX = _subY = 0;
+            X = hostX;
+            Y = hostY;
+            return new Transition.Return(hostX, hostY, nx, ny, next.Id, true);
         }
         X = Clamp(nx, 0, device.ScreenWidth - 1);
         Y = Clamp(ny, 0, device.ScreenHeight - 1);
@@ -322,8 +429,7 @@ public sealed class EdgeMachine
     {
         if (ActiveDeviceId != null)
             return;
-        X = Clamp(x, OriginX, OriginX + ScreenW - 1);
-        Y = Clamp(y, OriginY, OriginY + ScreenH - 1);
+        (X, Y) = ClampHost(x, y, X, Y);
     }
 
     public Transition ForceEnter(string id) =>
@@ -357,8 +463,7 @@ public sealed class EdgeMachine
         ActiveDeviceId = null;
         ReturnArmed = false;
         _subX = _subY = 0;
-        X = Clamp(hostX, OriginX, OriginX + ScreenW - 1);
-        Y = Clamp(hostY, OriginY, OriginY + ScreenH - 1);
+        (X, Y) = ClampHost(hostX, hostY, hostX, hostY);
         return new Transition.Return(X, Y, 0, 0);
     }
 
@@ -402,10 +507,11 @@ public sealed class EdgeMachine
     private bool MatchesCorner(DevicePlacement device, int x, int y)
     {
         var size = Math.Max(1, device.CornerSizePx);
-        var left = OriginX;
-        var top = OriginY;
-        var right = OriginX + ScreenW;
-        var bottom = OriginY + ScreenH;
+        var mon = MonitorFor(device);
+        var left = mon.X;
+        var top = mon.Y;
+        var right = mon.Right;
+        var bottom = mon.Bottom;
         return device.Corner switch
         {
             ScreenCorner.TopLeft => x < left + size && y < top + size && (x < left || y < top),
@@ -418,31 +524,36 @@ public sealed class EdgeMachine
 
     private bool MatchesEdge(DevicePlacement device, int x, int y)
     {
+        // Virtual-desktop coordinates: the pointer must come from inside the device's monitor and step past
+        // its attach edge (also when another monitor continues there - the device sits between them).
+        var m = MonitorFor(device);
+        if (_monitors.Count > 1 && !m.Contains(X, Y))
+            return false;
         var crossed = device.PcEdge switch
         {
-            ScreenEdge.Left => x < OriginX,
-            ScreenEdge.Right => x >= OriginX + ScreenW,
-            ScreenEdge.Top => y < OriginY,
-            ScreenEdge.Bottom => y >= OriginY + ScreenH,
+            ScreenEdge.Left => x < m.X,
+            ScreenEdge.Right => x >= m.Right,
+            ScreenEdge.Top => y < m.Y,
+            ScreenEdge.Bottom => y >= m.Bottom,
             _ => false
         };
         if (!crossed)
             return false;
-        var along = device.PcEdge is ScreenEdge.Left or ScreenEdge.Right ? y - OriginY : x - OriginX;
-        var span = EffectiveSpan(device);
-        return along >= device.OffsetPx && along < device.OffsetPx + span;
+        var along = device.PcEdge is ScreenEdge.Left or ScreenEdge.Right ? y : x;
+        var (lo, hi) = Segment(device, m);
+        return along >= lo && along < hi;
     }
 
     private (int X, int Y) Entry(DevicePlacement device, int x, int y)
     {
         if (device.Anchor == AnchorKind.Corner)
             return (Math.Max(0, device.ScreenWidth / 2), Math.Max(0, device.ScreenHeight / 2));
-        var alongPc = device.PcEdge is ScreenEdge.Left or ScreenEdge.Right
-            ? Clamp(y, OriginY, OriginY + ScreenH - 1) - OriginY
-            : Clamp(x, OriginX, OriginX + ScreenW - 1) - OriginX;
-        var relative = Math.Max(0, alongPc - device.OffsetPx);
+        var m = MonitorFor(device);
+        var (lo, hi) = Segment(device, m);
+        var alongPc = device.PcEdge is ScreenEdge.Left or ScreenEdge.Right ? y : x;
+        var relative = Math.Max(0, alongPc - lo);
         var side = AlongLength(device);
-        var span = EffectiveSpan(device);
+        var span = Math.Max(1, hi - lo);
         relative = Clamp(relative, 0, Math.Max(0, span - 1));
         var along = Scale(relative, span, side);
         return Place(device, along);
@@ -467,37 +578,74 @@ public sealed class EdgeMachine
 
     private void MapBack(DevicePlacement device, int devX, int devY, out int hostX, out int hostY)
     {
+        var m = MonitorFor(device);
         if (device.Anchor == AnchorKind.Corner)
         {
-            hostX = device.Corner is ScreenCorner.TopRight or ScreenCorner.BottomRight ? OriginX + ScreenW - 1 : OriginX;
-            hostY = device.Corner is ScreenCorner.BottomLeft or ScreenCorner.BottomRight ? OriginY + ScreenH - 1 : OriginY;
+            hostX = device.Corner is ScreenCorner.TopRight or ScreenCorner.BottomRight ? m.Right - 1 : m.X;
+            hostY = device.Corner is ScreenCorner.BottomLeft or ScreenCorner.BottomRight ? m.Bottom - 1 : m.Y;
             return;
         }
-        var alongDev = device.ReturnEdge is ScreenEdge.Left or ScreenEdge.Right ? devY : devX;
-        var side = AlongLength(device);
-        var span = EffectiveSpan(device);
-        var relative = Scale(alongDev, side, span);
-        var alongPc = device.OffsetPx + relative;
+        var along = AlongOnSegment(device, m, devX, devY);
         switch (device.PcEdge)
         {
             case ScreenEdge.Left:
-                hostX = OriginX;
-                hostY = OriginY + Clamp(alongPc, 0, ScreenH - 1);
+                hostX = m.X;
+                hostY = Clamp(along, m.Y, m.Bottom - 1);
                 break;
             case ScreenEdge.Right:
-                hostX = OriginX + ScreenW - 1;
-                hostY = OriginY + Clamp(alongPc, 0, ScreenH - 1);
+                hostX = m.Right - 1;
+                hostY = Clamp(along, m.Y, m.Bottom - 1);
                 break;
             case ScreenEdge.Top:
-                hostY = OriginY;
-                hostX = OriginX + Clamp(alongPc, 0, ScreenW - 1);
+                hostY = m.Y;
+                hostX = Clamp(along, m.X, m.Right - 1);
                 break;
             default:
-                hostY = OriginY + ScreenH - 1;
-                hostX = OriginX + Clamp(alongPc, 0, ScreenW - 1);
+                hostY = m.Bottom - 1;
+                hostX = Clamp(along, m.X, m.Right - 1);
                 break;
         }
     }
+
+    private int AlongOnSegment(DevicePlacement device, HostMonitor m, int devX, int devY)
+    {
+        var alongDev = device.ReturnEdge is ScreenEdge.Left or ScreenEdge.Right ? devY : devX;
+        var (lo, hi) = Segment(device, m);
+        return lo + Scale(alongDev, AlongLength(device), Math.Max(1, hi - lo));
+    }
+
+    /// <summary>Leaving the far side of a device placed between monitors: land on the neighbour's facing edge.</summary>
+    private void MapThrough(DevicePlacement device, HostMonitor next, int devX, int devY, out int hostX, out int hostY)
+    {
+        var along = AlongOnSegment(device, MonitorFor(device), devX, devY);
+        switch (device.PcEdge)
+        {
+            case ScreenEdge.Right:
+                hostX = next.X;
+                hostY = Clamp(along, next.Y, next.Bottom - 1);
+                break;
+            case ScreenEdge.Left:
+                hostX = next.Right - 1;
+                hostY = Clamp(along, next.Y, next.Bottom - 1);
+                break;
+            case ScreenEdge.Bottom:
+                hostY = next.Y;
+                hostX = Clamp(along, next.X, next.Right - 1);
+                break;
+            default:
+                hostY = next.Bottom - 1;
+                hostX = Clamp(along, next.X, next.Right - 1);
+                break;
+        }
+    }
+
+    private static ScreenEdge Opposite(ScreenEdge edge) => edge switch
+    {
+        ScreenEdge.Left => ScreenEdge.Right,
+        ScreenEdge.Right => ScreenEdge.Left,
+        ScreenEdge.Top => ScreenEdge.Bottom,
+        _ => ScreenEdge.Top
+    };
 
     private static bool IsInsideArm(DevicePlacement device, int x, int y)
     {

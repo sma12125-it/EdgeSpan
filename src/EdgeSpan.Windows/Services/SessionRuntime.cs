@@ -253,7 +253,7 @@ public sealed class SessionRuntime : IDisposable
             ShowGlow(Host.Machine.ActiveDeviceId);
     }
 
-    private GlowBand? ShowGlow(string? deviceId)
+    private GlowBand? ShowGlow(string? deviceId, int? atX = null, int? atY = null)
     {
         if (!OperatingSystem.IsWindows() || !Host.Settings.EdgeGlowEnabled || string.IsNullOrEmpty(deviceId))
         {
@@ -266,14 +266,15 @@ public sealed class SessionRuntime : IDisposable
             _glow.Hide();
             return null;
         }
-        var originX = Host.Settings.ScreenOriginX;
-        var originY = Host.Settings.ScreenOriginY;
-        var width = Math.Max(1, Host.Settings.ScreenWidth);
-        var height = Math.Max(1, Host.Settings.ScreenHeight);
-        var dpi = EdgeGlow.DpiAt(originX + width / 2, originY);
+        // Multi-monitor: the band sits on the device's own monitor (virtual-desktop px, that monitor's DPI).
+        var mon = Host.Machine.MonitorFor(placement);
+        var dpi = mon.Dpi > 0 ? mon.Dpi : EdgeGlow.DpiAt(mon.X + mon.W / 2, mon.Y + mon.H / 2);
         // The band must be deep enough for the bulge (ExitDepth/EnterDepth are fractions of it).
         var thick = Math.Max(112, Math.Clamp(Host.Settings.EdgeGlowThickness, 8, 160)) * dpi / 96;
-        var band = GlowBand.For(placement, originX, originY, width, height, Math.Max(1, thick));
+        var band = GlowBand.For(placement, mon.X, mon.Y, mon.W, mon.H, Math.Max(1, thick)).ClipTo(mon);
+        // Returning through the far side of a device placed between monitors: draw on the neighbour's edge.
+        if (atX is { } px && atY is { } py && !mon.Contains(px, py) && Host.Machine.NeighborFor(placement) is { } next && next.Contains(px, py))
+            band = band.Facing(next);
         _glow.Show(band, Host.Settings.EdgeGlowColor, Host.Settings.EdgeGlowIntensity);
         return band;
     }
@@ -301,11 +302,10 @@ public sealed class SessionRuntime : IDisposable
         if (Host.Settings.BreakthroughEnabled && Host.Settings.EdgeGlowEnabled && !string.IsNullOrEmpty(back))
         {
             // Android -> Windows: the line is stretched in at the mapped point and tears.
-            var band = ShowGlow(back);
+            var band = ShowGlow(back, x, y);
             if (band is { } b)
             {
-                var along = ElasticLine.Along(b.Edge, x, y, Host.Settings.ScreenOriginX, Host.Settings.ScreenOriginY,
-                    Math.Max(1, Host.Settings.ScreenWidth), Math.Max(1, Host.Settings.ScreenHeight));
+                var along = ElasticLine.Along(b.Edge, x, y, b.X, b.Y, b.Width, b.Height);
                 _glow.Cross(ElasticMode.Enter, along, reduce);
             }
             CrossCue(back);
@@ -325,8 +325,7 @@ public sealed class SessionRuntime : IDisposable
     {
         if (!OperatingSystem.IsWindows() || !GetCursorPos(out var p))
             return 0.5;
-        return ElasticLine.Along(band.Edge, p.X, p.Y, Host.Settings.ScreenOriginX, Host.Settings.ScreenOriginY,
-            Math.Max(1, Host.Settings.ScreenWidth), Math.Max(1, Host.Settings.ScreenHeight));
+        return ElasticLine.Along(band.Edge, p.X, p.Y, band.X, band.Y, band.Width, band.Height);
     }
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]

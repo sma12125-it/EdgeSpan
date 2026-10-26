@@ -7,6 +7,10 @@ public sealed class DeviceConfig
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "Android";
+    /// <summary>Windows monitor id (e.g. \\.\DISPLAY2) the device is attached to; empty = primary.</summary>
+    public string Monitor { get; set; } = "";
+    /// <summary>Saved placement per monitor configuration key ("monitor|edge|anchor|corner|offset").</summary>
+    public Dictionary<string, string> Layouts { get; set; } = new();
     public string Address { get; set; } = "";
     public int Port { get; set; } = ProductInfo.DefaultSessionPort;
     public string PcEdge { get; set; } = "Right";

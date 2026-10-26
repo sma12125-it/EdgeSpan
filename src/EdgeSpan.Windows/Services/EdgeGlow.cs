@@ -43,6 +43,7 @@ public sealed class EdgeGlow : IDisposable
     private double _dpiScale = 1;
     private double[] _linePos = Array.Empty<double>();
     private double[] _lineOp = Array.Empty<double>();
+    private double[] _lineW = Array.Empty<double>();
     private WndProc? _wndProc;
 
     public void Show(GlowBand band, string? color, int intensity)
@@ -304,17 +305,14 @@ public sealed class EdgeGlow : IDisposable
             mode = _crossMode;
             cross = _crossAlong;
         }
-        // Only the shared elastic boundary line is drawn now (the old soft halo/burst band is gone).
-        // Idle: a thin static teal line on the edge. Exit (Windows -> Android): the line sits inside
-        // the band and its Gaussian bulge at the crossing point is pulled out to the edge, then snaps
-        // back and fades. Enter (Android -> Windows): it is stretched inward at the entry point and tears.
+        // Only the shared elastic boundary line is drawn (the old soft halo/burst band is gone). Its baseline is
+        // centred on the exact edge pixel row/column (distance 0) at all times; no inset. Exit (Windows -> Android):
+        // only the Gaussian segment at the crossing point deforms, pulled out past the edge, which is drawn as the
+        // line thinning/stretching there with its tip clipped by the edge. Enter: stretched inward, then tears.
         var vertical = band.Edge is GlowEdge.Left or GlowEdge.Right || (band.Edge is not (GlowEdge.Top or GlowEdge.Bottom) && _height >= _width);
         var thickPx = Math.Max(1, vertical ? _width : _height);
         var lineCore = 2.2 * _dpiScale / thickPx;
         var lineHalo = 9.0 * _dpiScale / thickPx;
-        const double idleRest = 0.035;
-        var rest = !crossing ? idleRest : mode == ElasticMode.Exit ? ElasticLine.ExitDepth + idleRest : idleRest;
-        // Spec colour for the shared line on both platforms (teal #14B8A6), not the old glow colour.
         double ar = (ElasticLine.Accent >> 16) & 0xFF, ag = (ElasticLine.Accent >> 8) & 0xFF, ab = ElasticLine.Accent & 0xFF;
         _ = (r, g, b);
         var n = vertical ? _height : _width;
@@ -322,20 +320,21 @@ public sealed class EdgeGlow : IDisposable
         {
             _linePos = new double[n];
             _lineOp = new double[n];
+            _lineW = new double[n];
         }
         for (var i = 0; i < n; i++)
         {
             var a = n <= 1 ? 0 : i / (double)(n - 1);
             if (crossing)
             {
-                _linePos[i] = rest + ElasticLine.Displacement(mode, a, cross, ms);
-                // Exit: fade the inner line in over the first 40 ms so it reads as the edge line being grabbed.
-                var fadeIn = mode == ElasticMode.Exit ? Math.Clamp(ms / 40.0, 0, 1) : 1;
-                _lineOp[i] = ElasticLine.Opacity(mode, a, cross, ms) * fadeIn;
+                _linePos[i] = ElasticLine.Offset(mode, a, cross, ms);
+                _lineW[i] = ElasticLine.Thickness(mode, a, cross, ms);
+                _lineOp[i] = ElasticLine.Opacity(mode, a, cross, ms);
             }
             else
             {
-                _linePos[i] = idleRest;
+                _linePos[i] = 0;
+                _lineW[i] = 1;
                 _lineOp[i] = 0.85;
             }
         }
@@ -348,8 +347,9 @@ public sealed class EdgeGlow : IDisposable
                 var idx = vertical ? y : x;
                 var plain = EdgeDistance(band.Edge, x, y, _width, _height);
                 var dd = plain - _linePos[idx];
-                var coreGlow = Math.Exp(-dd * dd / coreDen);
-                var glow = _lineOp[idx] * peak * (coreGlow + 0.42 * Math.Exp(-dd * dd / haloDen));
+                var w2 = Math.Max(0.04, _lineW[idx] * _lineW[idx]);
+                var coreGlow = Math.Exp(-dd * dd / (coreDen * w2));
+                var glow = _lineOp[idx] * peak * (coreGlow + 0.42 * Math.Exp(-dd * dd / (haloDen * w2)));
                 var alpha = (byte)Math.Clamp((int)(Math.Clamp(glow, 0, 1) * 255), 0, 255);
                 var lift = 70 * coreGlow;
                 var pb = (byte)Math.Clamp((ab + lift) * alpha / 255, 0, 255);

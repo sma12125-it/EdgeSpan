@@ -53,6 +53,17 @@ object ElasticLine {
         return EnterDepth * b * exp(-5 * q) * cos(9 * q)
     }
 
+    /** Drawable offset from the exact edge (0 = on the edge); exit bulges point outward and are clipped. */
+    fun offset(mode: Int, along: Double, cross: Double, ms: Double): Double =
+        if (mode == EXIT) 0.0 else kotlin.math.max(0.0, displacement(mode, along, cross, ms))
+
+    /** Stroke width multiplier: on exit the segment at the crossing thins as it is stretched past the edge. */
+    fun thickness(mode: Int, along: Double, cross: Double, ms: Double): Double {
+        if (mode != EXIT || ms <= 0 || ms >= DurationMs) return 1.0
+        val pull = (-displacement(mode, along, cross, ms) / ExitDepth).coerceIn(0.0, 1.0)
+        return 1 - 0.8 * pull
+    }
+
     fun opacity(mode: Int, along: Double, cross: Double, ms: Double): Double {
         if (ms < 0 || ms >= DurationMs) return 0.0
         if (mode == EXIT) return 1 - smooth(DurationMs - 90, DurationMs, ms)

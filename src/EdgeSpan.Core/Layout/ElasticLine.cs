@@ -54,6 +54,27 @@ public static class ElasticLine
         return EnterDepth * bell * Math.Exp(-5 * q) * Math.Cos(9 * q);
     }
 
+    /// <summary>
+    /// Drawable offset of the line from the exact screen-edge pixel, in band-thickness units (0 = on the edge).
+    /// The baseline never moves: on Exit the bulge points out of the screen (negative displacement), which is
+    /// not drawable, so it is clipped to the edge and shown via <see cref="Thickness"/> instead. On Enter
+    /// the line is pulled into the screen.
+    /// </summary>
+    public static double Offset(ElasticMode mode, double along, double cross, double ms) =>
+        mode == ElasticMode.Exit ? 0 : Math.Max(0, Displacement(mode, along, cross, ms));
+
+    /// <summary>
+    /// Stroke width multiplier 0..1. On Exit the segment at the crossing point thins as it is stretched out
+    /// past the edge (tip clipped by the edge); everywhere else it stays 1.
+    /// </summary>
+    public static double Thickness(ElasticMode mode, double along, double cross, double ms)
+    {
+        if (mode != ElasticMode.Exit || ms <= 0 || ms >= DurationMs)
+            return 1;
+        var pull = Math.Clamp(-Displacement(mode, along, cross, ms) / ExitDepth, 0, 1);
+        return 1 - 0.8 * pull;
+    }
+
     /// <summary>Opacity 0..1 of the elastic line at a point, including the tear gap and the fade-out.</summary>
     public static double Opacity(ElasticMode mode, double along, double cross, double ms)
     {
