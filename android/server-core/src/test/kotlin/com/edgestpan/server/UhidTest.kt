@@ -68,11 +68,12 @@ class UhidTest {
         writes.clear()
         server.handle(3, byteArrayOf(0xE8.toByte(), 0x03, 0, 0, 10, 0, 0, 0))
         val dx = writes.sumOf { if (it.size < 8) 0 else it[7].toInt().toByte().toInt() }
-        assertEquals(99 - 50, dx)
+        // At the edge the pointer is pinned: at least the exact distance, plus a full-width push into the wall.
+        assertEquals(99 - 50 + 100, dx)
         writes.clear()
         server.handle(3, byteArrayOf(0xD8.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 10, 0, 0, 0))
         val back = writes.sumOf { if (it.size < 8) 0 else it[7].toInt().toByte().toInt() }
-        assertEquals(-99, back)
+        assertEquals(-99 - 100, back)
     }
 
     @Test
