@@ -97,6 +97,8 @@ public sealed class HostController : IDisposable
     public Action? SendWindowHotkey { get; set; }
     public Action? DragFailed { get; set; }
     public string DragFailureKey { get; private set; } = "";
+    private bool _dragMissLogged;
+    private long _edgeIdleLogged = -100000;
     private readonly FileSync _files = new();
     private readonly Dictionary<string, StagedPeer> _staged = new();
     private uint _fileSeq;
@@ -532,6 +534,21 @@ public sealed class HostController : IDisposable
                 _dragGaveUp = false;
                 _dragStillLogged = false;
             }
+            if (dragging && !_dragArmed && !_dragGaveUp && !_dragMissLogged && (x >= right || x <= Machine.OriginX || y >= bottom || y <= Machine.OriginY) && !TryEdgeSeat(x, y, out _, out _))
+            {
+                // Dragging against a screen border where no tablet sits (common with two monitors: the tablet is
+                // arranged on the other monitor's edge). Say where the tablets are so the log explains it.
+                _dragMissLogged = true;
+                var where = string.Join("; ", Machine.Devices.Select(d => $"{d.Id} {d.Anchor} {d.PcEdge} monitor={Machine.MonitorFor(d)} segment={Machine.Segment(d, Machine.MonitorFor(d))}"));
+                _effects.Add(new Effect.Log($"handoff edge-miss x={x} y={y} screen={Machine.OriginX},{Machine.OriginY} {Machine.ScreenW}x{Machine.ScreenH} tablets=[{where}]"));
+            }
+            if (!dragging && TryEdgeSeat(x, y, out var idleSeat, out var idleEdge) && _clock() - _edgeIdleLogged > 15000)
+            {
+                _edgeIdleLogged = _clock();
+                _effects.Add(new Effect.Log($"handoff edge-touch without window drag device={idleSeat} edge={idleEdge} x={x} y={y} (drag a title bar here to send a window)"));
+            }
+            if (!dragging)
+                _dragMissLogged = false;
             else if (!_dragGaveUp && !_dragArmed && TryEdgeSeat(x, y, out var seatId, out var seatEdge))
             {
                 _seatX = x;
@@ -782,13 +799,35 @@ public sealed class HostController : IDisposable
         {
             if (device.Anchor != AnchorKind.Edge)
                 continue;
-            if (!HandoffPolicy.OnEdgePixel(device.PcEdge, x, y, Machine.OriginX, Machine.OriginY, Machine.ScreenW, Machine.ScreenH, device.OffsetPx, HandoffPolicy.SpanOf(device)))
+            // Use the monitor the tablet is attached to, not the bounding box of all monitors: with two monitors
+            // the box edge is usually not the tablet's edge, so a dragged window never "reached" the tablet.
+            var m = Machine.MonitorFor(device);
+            var (lo, hi) = Machine.Segment(device, m);
+            if (!SeatPixel(device.PcEdge, x, y, m, lo, hi))
                 continue;
             deviceId = device.Id;
             edge = device.PcEdge;
             return true;
         }
         return false;
+    }
+
+    /// <summary>On the tablet's edge of its monitor (2 px inside, or up to 40 px into a neighbouring monitor).</summary>
+    public static bool SeatPixel(ScreenEdge edge, int x, int y, HostMonitor m, int lo, int hi)
+    {
+        const int slack = 2;
+        const int over = 40;
+        var along = edge is ScreenEdge.Left or ScreenEdge.Right ? y : x;
+        if (along < lo || along >= hi)
+            return false;
+        return edge switch
+        {
+            ScreenEdge.Right => x >= m.Right - slack && x < m.Right + over && y >= m.Y && y < m.Bottom,
+            ScreenEdge.Left => x <= m.X + slack - 1 && x > m.X - over && y >= m.Y && y < m.Bottom,
+            ScreenEdge.Bottom => y >= m.Bottom - slack && y < m.Bottom + over && x >= m.X && x < m.Right,
+            ScreenEdge.Top => y <= m.Y + slack - 1 && y > m.Y - over && x >= m.X && x < m.Right,
+            _ => false
+        };
     }
 
     private string? DragReject(string deviceId)

@@ -90,6 +90,8 @@ class SendToPcActivity : Activity() {
             val info = apps[position].activityInfo
             begin("${info.packageName}/${info.name}", apps[position].loadLabel(packageManager).toString())
         }
+        list.clipToPadding = false
+        list.setPadding(0, 0, 0, (48 * d).toInt())
         root.addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
     }
@@ -110,11 +112,13 @@ class SendToPcActivity : Activity() {
                     AppSender.send(applicationContext, component, title) { shell }
                     finish()
                 } else {
-                    // No shell server: ask for screen capture and mirror the phone while the app is open.
-                    pending = component to title
-                    val manager = getSystemService(MediaProjectionManager::class.java)
-                    @Suppress("DEPRECATION")
-                    startActivityForResult(manager.createScreenCaptureIntent(), REQUEST)
+                    // No silent full-screen mirror: the app must run on its own virtual display or not at all.
+                    val why = ShellSource.lastError
+                    android.util.Log.w("EdgeSpan", "appstream stage no app display: $why")
+                    DiagFile.stage(applicationContext, "appstream no app display: $why")
+                    val text = (strings["sendPcNoDisplay"] ?: "Could not open the app in its own window on the PC: %s").replace("%s", why)
+                    Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+                    finish()
                 }
             }
         }, "edgestpan-sendpc-open").start()

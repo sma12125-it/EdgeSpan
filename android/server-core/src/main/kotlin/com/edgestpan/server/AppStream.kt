@@ -78,6 +78,13 @@ class AppStreamServer(private val port: Int = 27185) {
         val session = runCatching { Session(component, even(w), even(h), dpi, bitrate) { pts, flags, data -> video(out, pts, flags, data) } }
             .onFailure { status(out, false, -1, "create failed: $it") }
             .getOrNull() ?: return
+        if (session.launchResult.startsWith("Error") || session.launchResult.contains("Exception")) {
+            // The display exists but the app did not start on it: refuse rather than stream an empty display.
+            log("launch failed on display ${session.displayId}: ${session.launchResult}")
+            status(out, false, session.displayId, "launch failed: ${session.launchResult}")
+            session.close()
+            return
+        }
         try {
             status(out, true, session.displayId, session.launchResult)
             while (true) {
@@ -188,7 +195,17 @@ class AppStreamServer(private val port: Int = 27185) {
             val text = (p.inputStream.bufferedReader().readText() + p.errorStream.bufferedReader().readText()).trim()
             p.waitFor()
             println("edgestpan-server appstream launch $component -> $text")
-            return text.lineSequence().lastOrNull { it.isNotBlank() } ?: ""
+            val last = text.lineSequence().lastOrNull { it.isNotBlank() } ?: ""
+            if ((last.startsWith("Error") || text.contains("Exception")) && component.contains('/')) {
+                // Retry without the task flags; some OEM builds reject --activity-clear-task on secondary displays.
+                val retry = arrayOf("am", "start", "--display", displayId.toString(), "-n", component)
+                val p2 = Runtime.getRuntime().exec(retry)
+                val t2 = (p2.inputStream.bufferedReader().readText() + p2.errorStream.bufferedReader().readText()).trim()
+                p2.waitFor()
+                println("edgestpan-server appstream launch retry $component -> $t2")
+                return t2.lineSequence().lastOrNull { it.isNotBlank() } ?: ""
+            }
+            return last
         }
 
         private fun drainLoop() {

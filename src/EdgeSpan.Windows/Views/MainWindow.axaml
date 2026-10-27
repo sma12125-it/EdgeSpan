@@ -100,8 +100,8 @@
           <TextBlock Text="{Binding Ui[savedChip]}" Foreground="{DynamicResource MintBrush}" FontSize="12"/>
         </Border>
       </Grid>
-      <ScrollViewer x:Name="Pages" Grid.Row="2" Padding="32,0,32,48" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-        <StackPanel x:Name="PageStack" Spacing="0" MaxWidth="1000" HorizontalAlignment="Stretch">
+      <ScrollViewer x:Name="Pages" Grid.Row="2" Padding="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="PageStack" Spacing="0" MaxWidth="1064" Margin="32,0,32,48" HorizontalAlignment="Stretch">
 
           <!-- HOME: connect flow + live status -->
           <StackPanel IsVisible="{Binding ShowHome}" Spacing="0">
@@ -653,6 +653,19 @@
               </Grid>
             </Border>
             <TextBlock Classes="desc" Text="{Binding Ui[autosaveHint]}" Margin="2,0,0,8"/>
+            <TextBlock Classes="section" Text="{Binding Ui[handoffTestLabel]}"/>
+            <Border Classes="setting">
+    <StackPanel Spacing="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+          <TextBlock Classes="title" Text="{Binding Ui[handoffTestLabel]}"/>
+          <TextBlock Classes="hint" Text="{Binding Ui[handoffTestHint]}" TextWrapping="Wrap"/>
+        </StackPanel>
+        <Button Grid.Column="1" Content="{Binding Ui[handoffTestButton]}" Command="{Binding TestHandoffCommand}"/>
+      </Grid>
+      <SelectableTextBlock Text="{Binding HandoffTestResult}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding HandoffTestResult, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+    </StackPanel>
+  </Border>
             <TextBlock Classes="section" Text="{Binding Ui[setGeneral]}"/>
 <Border Classes="setting">
     <Grid ColumnDefinitions="Auto,*,Auto">

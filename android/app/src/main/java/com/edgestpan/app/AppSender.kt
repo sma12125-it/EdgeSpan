@@ -114,10 +114,10 @@ object AppSender {
             toast(context, "sendPcNoLink", "Connect to the PC first (USB or Wi-Fi).")
             return
         }
-        Log.i(TAG, "appstream stage link ok address=$address method=${AppLink.method} component=$component")
+        DiagFile.stage(context, "appstream stage link ok address=$address method=${AppLink.method} component=$component")
         toast(context, "sendPcStageConnecting", "Connecting to PC…")
         val source = sourceFactory()
-        Log.i(TAG, "appstream stage source ${source?.javaClass?.simpleName ?: "none"} ${source?.width}x${source?.height}")
+        DiagFile.stage(context, "appstream stage source ${source?.javaClass?.simpleName ?: "none"} ${source?.width}x${source?.height}")
         if (source == null) {
             toast(context, "sendPcNoSource", "Could not capture the app.")
             return
@@ -133,7 +133,7 @@ object AppSender {
             out.flush()
             val n = Integer.reverseBytes(input.readInt())
             if (n !in 13..64) {
-                Log.w(TAG, "appstream stage bad reply length $n")
+                DiagFile.stage(context, "appstream stage bad reply length $n")
                 toast(context, "sendPcRefused", "The PC refused. Turn on \"Android apps to this PC\" in EdgeSpan on Windows.")
                 return
             }
@@ -143,7 +143,7 @@ object AppSender {
                 return
             }
             toast(context, "sendPcStageShown", "Now showing on PC")
-            Log.i(TAG, "appstream connected $address via ${AppLink.method} ${source.width}x${source.height} $component")
+            DiagFile.stage(context, "appstream connected $address via ${AppLink.method} ${source.width}x${source.height} $component")
             var pcSeq = reply.second
             Thread({
                 try {
@@ -174,7 +174,7 @@ object AppSender {
             }
             toast(context, "sendPcReturned", "The app is back on this device.")
         } catch (e: java.io.IOException) {
-            Log.w(TAG, "appstream socket $address: $e")
+            DiagFile.stage(context, "appstream socket $address: $e")
             toast(context, "sendPcNoLink", "Connect to the PC first (USB or Wi-Fi).")
         } finally {
             stop.set(true)
@@ -251,16 +251,25 @@ class ShellSource private constructor(private val sock: Socket, override val wid
             return try { status(s)?.third?.takeIf { it.contains('/') } } finally { runCatching { s.close() } }
         }
 
+        /** Why the last [open] failed, for the user-facing error (no silent mirroring). */
+        @Volatile var lastError: String = ""
+
         fun open(component: String, width: Int, height: Int, dpi: Int): ShellSource? {
+            lastError = ""
             val name = component.toByteArray()
             val b = ByteBuffer.allocate(1 + 2 + 2 + 2 + 4 + 2 + name.size).order(ByteOrder.LITTLE_ENDIAN)
             val w = (width / 2) * 2
             val h = (height / 2) * 2
             b.put(1).putShort(w.toShort()).putShort(h.toShort()).putShort(dpi.toShort()).putInt(AppStreamBitrate.forSize(w, h))
                 .putShort(name.size.toShort()).put(name)
-            val s = request(b.array()) ?: return null
+            val s = request(b.array()) ?: run {
+                lastError = "helper not running (connect over USB so EdgeSpan can start it)"
+                Log.w("EdgeSpan", "appstream shell unreachable on 127.0.0.1:$PORT")
+                return null
+            }
             val st = status(s)
             if (st == null || !st.first) {
+                lastError = st?.third?.ifBlank { null } ?: "no reply from helper"
                 Log.w("EdgeSpan", "appstream shell refused: ${st?.third}")
                 runCatching { s.close() }
                 return null

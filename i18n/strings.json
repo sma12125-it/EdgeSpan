@@ -404,5 +404,6 @@
   "handoffTestButton": {"en": "Run test", "fa": "اجرای آزمایش"},
   "handoffTestRunning": {"en": "Testing…", "fa": "در حال آزمایش…"},
   "sendPcStageConnecting": {"en": "Connecting to PC…", "fa": "در حال اتصال به رایانه…"},
-  "sendPcStageShown": {"en": "Now showing on PC", "fa": "اکنون روی رایانه نمایش داده می‌شود"}
+  "sendPcStageShown": {"en": "Now showing on PC", "fa": "اکنون روی رایانه نمایش داده می‌شود"},
+  "sendPcNoDisplay": {"en": "Could not open the app in its own window on the PC: %s", "fa": "باز کردن برنامه در پنجره‌ای مستقل روی رایانه ممکن نشد: %s"}
 }

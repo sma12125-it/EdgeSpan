@@ -189,7 +189,11 @@ public sealed partial class MainWindow : Window
         TopNav.IsVisible = narrow;
         // 24-36 px page margins (16 on very narrow windows), content centred with a 1000 px max width.
         var side = width < 560 ? 16 : width < 1100 ? 24 : 36;
-        Pages.Padding = new Thickness(side, 0, side, 48);
+        // Margins live on the content, not ScrollViewer.Padding: the padding is not part of the scroll extent,
+        // so the last card on long pages (Settings) was clipped and could not be scrolled into view.
+        Pages.Padding = default;
+        PageStack.Margin = new Thickness(side, 0, side, 48);
+        PageStack.MaxWidth = 1000 + side * 2;
         TitleRow.Margin = new Thickness(side, narrow ? 12 : 22, side, 14);
         var content = Math.Min(1000, width - navW - side * 2 - 16);
         // Arrange map scales with the available width (keeps roughly the monitor aspect).

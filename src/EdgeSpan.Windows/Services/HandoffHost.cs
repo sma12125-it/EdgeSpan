@@ -538,9 +538,11 @@ public sealed class HandoffHost : IDisposable
         return on;
     }
 
-    public void BeginDragHandoff(string deviceId, ScreenEdge edge, string? method)
+    public void BeginDragHandoff(string deviceId, ScreenEdge edge, string? method) => BeginDragHandoff(deviceId, edge, method, 0);
+
+    private void BeginDragHandoff(string deviceId, ScreenEdge edge, string? method, nint explicitHwnd)
     {
-        DiagLog.Write($"handoff begin device={deviceId} edge={edge} method={method} hwnd=0x{_dragHwnd:X}");
+        DiagLog.Write($"handoff begin device={deviceId} edge={edge} method={method} hwnd=0x{(explicitHwnd != 0 ? explicitHwnd : _dragHwnd):X}{(explicitHwnd != 0 ? " (tray/hotkey)" : "")}");
         nint hwnd;
         lock (_gate)
         {
@@ -549,7 +551,9 @@ public sealed class HandoffHost : IDisposable
                 DiagLog.Write("handoff busy");
                 return;
             }
-            hwnd = _dragHwnd;
+            // Tray/hotkey sends carry their own window: the mouse hook's drag probe clears _dragHwnd on every
+            // move while no drag is in progress, which made the tray path fail with "no window".
+            hwnd = explicitHwnd != 0 ? explicitHwnd : _dragHwnd;
         }
         // USB and LAN/Wi-Fi have a direct socket for the video; a relay link does not.
         if (method is "relay")
@@ -606,6 +610,8 @@ public sealed class HandoffHost : IDisposable
             return;
         }
         StatusKey = "";
+        if (explicitHwnd != 0)
+            _keepDrag = false; // no mouse button is held for a tray/hotkey send; the drag-follow must not "release" it
         var placed = _host.Settings.Devices.FirstOrDefault(d => d.Id == deviceId);
         lock (_gate)
         {
@@ -685,7 +691,7 @@ public sealed class HandoffHost : IDisposable
             edge = parsed;
         lock (_gate)
             _dragHwnd = hwnd;
-        BeginDragHandoff(deviceId, edge, method);
+        BeginDragHandoff(deviceId, edge, method, hwnd);
         _keepDrag = false;
     }
 

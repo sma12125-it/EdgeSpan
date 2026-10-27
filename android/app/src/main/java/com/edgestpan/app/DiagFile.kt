@@ -26,10 +26,24 @@ object DiagFile {
         }
     }
 
+    /** Handoff / app-stream stage line: logcat plus the exported diagnostics file. */
+    fun stage(context: Context, line: String) {
+        android.util.Log.i("EdgeSpan", line)
+        append(context.applicationContext ?: context, line)
+    }
+
     fun read(context: Context): String {
         return try {
             val file = file(context)
-            if (!file.exists()) "" else file.readLines().takeLast(200).joinToString("\n")
+            if (!file.exists()) return ""
+            val lines = file.readLines()
+            // Injector/session chatter used to push every handoff line out of the last-200 window, so handoff and
+            // app-stream stages are exported separately from the whole file.
+            val stages = lines.filter { it.contains("  handoff") || it.contains("  appstream") }.takeLast(300)
+            buildString {
+                if (stages.isNotEmpty()) append("--- handoff / appstream stages ---\n").append(stages.joinToString("\n")).append("\n--- recent ---\n")
+                append(lines.takeLast(400).joinToString("\n"))
+            }
         } catch (_: Exception) {
             ""
         }

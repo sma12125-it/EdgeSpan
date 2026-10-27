@@ -114,11 +114,11 @@ class HandoffViewer(
         else
             videoX = (engine.x - contentW / 2).coerceIn(0, (DisplaySize.width - contentW).coerceAtLeast(0))
         val id = event.id
-        Log.i("EdgeSpan", "handoff stage offer id=$id ${event.physW}x${event.physH} edge=${event.edge}")
+        DiagFile.stage(context, "handoff stage offer id=$id ${event.physW}x${event.physH} edge=${event.edge}")
         if (owner() == null) {
             // Without overlay permission or the accessibility service nothing can be drawn; say so instead of
             // accepting a stream we can never show.
-            Log.w("EdgeSpan", "handoff stage refused: no overlay permission and no accessibility service")
+            DiagFile.stage(context, "handoff stage refused: no overlay permission and no accessibility service")
             fail(id, "handoffNoOverlay")
             return
         }
@@ -127,15 +127,15 @@ class HandoffViewer(
         Thread({
             // USB goes through the adb reverse tunnel; LAN/direct links dial the PC's own address.
             val host = if (method == "usb") "127.0.0.1" else videoHost()
-            Log.i("EdgeSpan", "handoff video via $method host=${host ?: "none"}")
+            DiagFile.stage(context, "handoff video via $method host=${host ?: "none"}")
             if (host == null) {
-                Log.w("EdgeSpan", "handoff stage no video host")
+                DiagFile.stage(context, "handoff stage no video host")
                 fail(id, "handoffNoLink")
                 return@Thread
             }
             val key = engine.mediaReceiveKey()
             if (key == null) {
-                Log.w("EdgeSpan", "handoff stage no media key")
+                DiagFile.stage(context, "handoff stage no media key")
                 fail(id, "handoffNoKey")
                 return@Thread
             }
@@ -147,7 +147,7 @@ class HandoffViewer(
                 sock.receiveBufferSize = 256 * 1024
                 sock.soTimeout = 400
             } catch (e: Exception) {
-                Log.w("EdgeSpan", "handoff stage connect $host:27184 failed: $e")
+                DiagFile.stage(context, "handoff stage connect $host:27184 failed: $e")
                 runCatching { sock.close() }
                 fail(id, "handoffNoVideo")
                 return@Thread
