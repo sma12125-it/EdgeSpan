@@ -280,7 +280,10 @@ public sealed class UsbConductor
             return;
         }
         Note("uhid-restart stamp=" + stamp);
-        await Call(adb, token, "-s", serial, "shell", "sh", "-c", "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill $pid");
+        await Call(adb, token, "-s", serial, "shell", "sh", "-c", "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill $pid; " +
+            // A server whose pid file was lost (older build, crash) kept ports 27183/27185 and made every new start
+            // die with EADDRINUSE, so the old server kept answering. Kill every EdgeSpan server process by name.
+            "pkill -f com.edgestpan.server.ServerMai[n] 2>/dev/null; for p in /proc/[0-9]*; do [ \"${p#/proc/}\" = \"$$\" ] && continue; grep -q com.edgestpan.serve[r] $p/cmdline 2>/dev/null && kill ${p#/proc/} 2>/dev/null; done; sleep 0.3");
         var pushed = await Call(adb, token, "-s", serial, "push", dex, "/data/local/tmp/edgestpan-server.dex");
         if (pushed.Code != 0 || pushed.TimedOut)
         {
