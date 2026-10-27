@@ -20,6 +20,12 @@ namespace EdgeSpan.Windows.Services;
 /// </summary>
 internal static class WindowEncoder
 {
+    /// <summary>
+    /// Per encoder thread: returns a composited JPEG (window + its popups) while popups are open, else null.
+    /// WGC captures one HWND only, so menus/dropdowns are drawn in by GDI while they are visible.
+    /// </summary>
+    [ThreadStatic] public static Func<byte[]?>? Overlay;
+
     private static readonly Guid H264 = new("34363248-0000-0010-8000-00AA00389B71");
     private static readonly Guid Nv12 = new("3231564E-0000-0010-8000-00AA00389B71");
     private static readonly Guid LowLatency = new("9c27891a-ed7a-40e1-88e8-b22727a024ee");
@@ -162,6 +168,14 @@ internal static class WindowEncoder
         var waitStarted = Environment.TickCount64;
         while (!stop())
         {
+            if (Overlay?.Invoke() is { } overlayJpeg)
+            {
+                publish(overlayJpeg, (ulong)StopwatchMicros(), JpegStill.Flag);
+                sinceIdr = 0; // next H.264 frame after the popup closes is a keyframe
+                sawFrame = true;
+                Thread.Sleep(50);
+                continue;
+            }
             if (!arrived.Wait(12))
             {
                 if (!sawFrame && Environment.TickCount64 - waitStarted > 3000)

@@ -324,6 +324,16 @@ public sealed class HandoffHost : IDisposable
                 _host.SendHandoffFast(job.DeviceId, PacketType.HandoffClock, HandoffPayloads.WriteClock(job.Id, frame, captureUs));
             }
         }
+        job.Popups ??= new HandoffPopups(job.Hwnd);
+        var popups = job.Popups;
+        WindowEncoder.Overlay = () =>
+        {
+            var open = popups.Current();
+            if (open.Count == 0)
+                return null;
+            try { return GdiCapture.Composite(job.Hwnd, open); }
+            catch (Exception ex) { DiagLog.Write("handoff popup composite " + ex.Message); return null; }
+        };
         WindowEncoder.Run(job.Hwnd, _host.Settings.HandoffQuality, () => token.IsCancellationRequested || !_running, () =>
         {
             if (!job.NeedIdr)
@@ -375,6 +385,7 @@ public sealed class HandoffHost : IDisposable
     private void Finish(Job job, bool close, bool echo = true)
     {
         PlaceholderCard.Close(job.Id);
+        try { job.Popups?.Dismiss(); } catch (Exception) { }
         if (close && Volatile.Read(ref job.FramesSent) > 0)
         {
             if (Interlocked.CompareExchange(ref job.Restored, 1, 0) != 0)
@@ -443,6 +454,19 @@ public sealed class HandoffHost : IDisposable
         var winH = Math.Max(1, rect.Bottom - rect.Top);
         var sx = rect.Left + input.X * winW / Math.Max(1, job.ViewW);
         var sy = rect.Top + input.Y * winH / Math.Max(1, job.ViewH);
+        if (job.Popups is { } popups)
+        {
+            if (input.Kind != HandoffPayloads.InputMove && input.Down)
+            {
+                popups.AnchorX = sx;
+                popups.AnchorY = sy;
+                popups.HasAnchor = true;
+            }
+            // A click on a menu/dropdown goes to that popup, in its own client coordinates.
+            var target = popups.HitTest(sx, sy);
+            if (target != 0)
+                hwnd = target;
+        }
         var pt = new POINT { X = sx, Y = sy };
         ScreenToClient(hwnd, ref pt);
         var packed = (IntPtr)((pt.X & 0xFFFF) | ((pt.Y & 0xFFFF) << 16));
@@ -503,6 +527,7 @@ public sealed class HandoffHost : IDisposable
         public int Restored;
         public CancellationTokenSource? Stop;
         public Thread? Encoder;
+        public HandoffPopups? Popups;
     }
 
     public bool ProbeDrag()
@@ -693,6 +718,20 @@ public sealed class HandoffHost : IDisposable
             _dragHwnd = hwnd;
         BeginDragHandoff(deviceId, edge, method, hwnd);
         _keepDrag = false;
+        // No mouse drag carries this window: tell the tablet the "drag" is over at once, so the viewer stays put
+        // instead of following the pointer (it only moves when its title bar is dragged on the tablet).
+        Job? sent;
+        lock (_gate)
+        {
+            sent = _jobs.Values.FirstOrDefault(j => j.Hwnd == hwnd);
+            if (sent != null)
+                _offeredHwnd = 0;
+        }
+        if (sent != null)
+        {
+            _host.SendHandoff(sent.DeviceId, PacketType.HandoffState, HandoffPayloads.WriteState(new HandoffPayloads.State(sent.Id, HandoffPayloads.StateRestored)));
+            DiagLog.Write("handoff placed (tray/hotkey) id=" + sent.Id);
+        }
     }
 
     /// <summary>Visible, titled, non-tool top-level windows of other processes, for the tray "Send window" list.</summary>

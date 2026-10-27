@@ -53,6 +53,7 @@ class HandoffViewer(
     private var liveId = 0L
     private var edge = ScreenEdge.Right
     private var follow = false
+    @Volatile private var imageShown = false
     private var finger = false
     private var grabbed = false
     private var grabX = 0
@@ -625,6 +626,7 @@ class HandoffViewer(
                 if ((frame.flags and 2) != 0) {
                     val bmp = android.graphics.BitmapFactory.decodeByteArray(frame.annexb, 0, frame.annexb.size)
                     if (bmp != null) {
+                        imageShown = true
                         main.post {
                             imageView?.setImageBitmap(bmp)
                             imageView?.visibility = View.VISIBLE
@@ -633,6 +635,14 @@ class HandoffViewer(
                         }
                     }
                     continue
+                }
+                if (imageShown) {
+                    // Back to H.264 after a composited (popup) still: show the video surface again.
+                    imageShown = false
+                    main.post {
+                        imageView?.visibility = View.GONE
+                        surfaceView?.visibility = View.VISIBLE
+                    }
                 }
                 if (frame.flags == 1) held = frame
                 val current = surface

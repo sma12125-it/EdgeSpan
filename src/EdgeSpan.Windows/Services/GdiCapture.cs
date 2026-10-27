@@ -19,6 +19,13 @@ internal static class GdiCapture
         var started = Environment.TickCount64;
         while (!stop())
         {
+            if (WindowEncoder.Overlay?.Invoke() is { } overlayJpeg)
+            {
+                publish(overlayJpeg, (ulong)(Environment.TickCount64 * 1000), JpegStill.Flag);
+                sent++;
+                Thread.Sleep(50);
+                continue;
+            }
             var frame = Grab(hwnd, out var w, out var h, out var how);
             if (frame == null)
             {
@@ -87,6 +94,33 @@ internal static class GdiCapture
             DeleteDC(mem);
             ReleaseDC(IntPtr.Zero, screen);
         }
+    }
+
+    /// <summary>Main window plus its popups at their offsets, as a JPEG for the tablet (null if the grab failed).</summary>
+    public static byte[]? Composite(nint main, IReadOnlyList<HandoffPopups.Popup> popups)
+    {
+        var frame = Grab(main, out var w, out var h, out _);
+        if (frame == null)
+            return null;
+        foreach (var p in popups)
+        {
+            var pop = Grab(p.Hwnd, out var pw, out var ph, out _);
+            if (pop == null)
+                continue;
+            for (var y = 0; y < ph; y++)
+            {
+                var dy = p.Y + y;
+                if (dy < 0 || dy >= h)
+                    continue;
+                var x0 = Math.Max(0, -p.X);
+                var x1 = Math.Min(pw, w - p.X);
+                if (x1 <= x0)
+                    continue;
+                Buffer.BlockCopy(pop, (y * pw + x0) * 4, frame, (dy * w + p.X + x0) * 4, (x1 - x0) * 4);
+            }
+        }
+        var (jw, jh, scaled) = Scale(frame, w, h, 1600);
+        return JpegStill.Encode(scaled, jw, jh, jw * 4, 80);
     }
 
     private static int Hash(byte[] d)
