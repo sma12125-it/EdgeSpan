@@ -14,6 +14,7 @@ internal sealed class HandoffPopups
 
     private readonly nint _main;
     private readonly uint _pid;
+    private readonly HashSet<uint> _pids = new();
     private readonly HashSet<nint> _before = new();
     private readonly HashSet<nint> _moved = new();
     private List<Popup> _current = new();
@@ -29,6 +30,10 @@ internal sealed class HandoffPopups
     {
         _main = main;
         GetWindowThreadProcessId(main, out _pid);
+        _pids.Add(_pid);
+        // UWP/WinUI hosts (ApplicationFrameHost) draw content from a child window of another process; its popups
+        // belong to that process, so track every process that owns a child of the handed-off window.
+        EnumChildWindows(main, (c, _) => { GetWindowThreadProcessId(c, out var p); _pids.Add(p); return true; }, 0);
         foreach (var h in Candidates())
             _before.Add(h);
     }
@@ -107,13 +112,13 @@ internal sealed class HandoffPopups
                 return true;
             GetWindowThreadProcessId(h, out var pid);
             var cls = ClassOf(h);
-            if (pid != _pid && cls != "#32768")
-                return true;
-            var style = GetWindowLongW(h, -16);
             var owner = GetWindow(h, 4);
-            var popup = (style & unchecked((int)0x80000000)) != 0;
             var ownedByMain = owner != 0 && (owner == _main || GetAncestor(owner, 3) == _main);
-            if (cls == "#32768" || ownedByMain || (popup && pid == _pid))
+            // Generic for every toolkit (Win32, WPF, WinForms, UWP/WinUI, Electron/Chromium, Office, Java...):
+            // any window that appears after the handoff and is owned by the handed-off window, or belongs to one of
+            // its processes (menus, dropdowns, tooltips, flyouts, dialogs), travels with it. System menus (#32768)
+            // are owned by the shell, so they are matched by class.
+            if (ownedByMain || _pids.Contains(pid) || cls == "#32768")
                 found.Add(h);
             return true;
         }, 0);
@@ -141,6 +146,7 @@ internal sealed class HandoffPopups
 
     private delegate bool EnumProc(nint hwnd, nint lParam);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc proc, nint lParam);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(nint parent, EnumProc proc, nint lParam);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint hwnd);
     [DllImport("user32.dll")] private static extern nint GetWindow(nint hwnd, uint cmd);
     [DllImport("user32.dll")] private static extern nint GetAncestor(nint hwnd, uint flags);
