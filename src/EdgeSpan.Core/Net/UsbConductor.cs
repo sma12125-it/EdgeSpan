@@ -58,6 +58,17 @@ public sealed class UsbConductor
         {
             try
             {
+                if (_reconnectAsked)
+                {
+                    _reconnectAsked = false;
+                    Note("usb-manual-reconnect " + (active ?? ""));
+                    await Lost(adb, active, "usb-manual-reconnect", token);
+                    active = null;
+                    wasConnected = false;
+                    lastConnected = long.MinValue;
+                    backoff = 1000;
+                    continue;
+                }
                 if (IsConnected())
                 {
                     lastConnected = Environment.TickCount64;
@@ -153,10 +164,18 @@ public sealed class UsbConductor
             Note("usb-teardown " + serial);
         }
         _retrying = true;
+        // The tablet helper's sockets belonged to the dead session; always start a fresh one on the next setup
+        // (kills any orphan by name first, so the new one never hits EADDRINUSE).
+        _freshServer = true;
         Phase("reconnecting", "usbReconnecting");
     }
 
     private bool _retrying;
+    private bool _freshServer;
+
+    /// <summary>Manual "Reconnect": tear the current USB session down and redo the whole setup.</summary>
+    public void RequestReconnect() => _reconnectAsked = true;
+    private volatile bool _reconnectAsked;
     private string Busy(string phase) => _retrying ? "reconnecting" : phase;
 
     private Task Backoff(ref int backoff, CancellationToken token)
@@ -272,14 +291,15 @@ public sealed class UsbConductor
         var stamp = DexStamp(dex);
         var alive = await Call(adb, token, "-s", serial, "shell", "sh", "-c",
             "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill -0 $pid 2>/dev/null && [ \"$(cat /data/local/tmp/edgestpan-server.stamp 2>/dev/null)\" = \"" + stamp + "\" ] && echo server-alive");
-        if ((alive.Text ?? "").Contains("server-alive", StringComparison.Ordinal))
+        if (!_freshServer && (alive.Text ?? "").Contains("server-alive", StringComparison.Ordinal))
         {
             // Keep the running server so a connected phone keeps its injection socket.
             Inject?.Invoke("injectUhid");
             Note("uhid-kept");
             return;
         }
-        Note("uhid-restart stamp=" + stamp);
+        Note("uhid-restart stamp=" + stamp + (_freshServer ? " (after reconnect)" : ""));
+        _freshServer = false;
         await Call(adb, token, "-s", serial, "shell", "sh", "-c", "pid=$(cat /data/local/tmp/edgestpan-server.pid 2>/dev/null); [ -n \"$pid\" ] && kill $pid; " +
             // A server whose pid file was lost (older build, crash) kept ports 27183/27185 and made every new start
             // die with EADDRINUSE, so the old server kept answering. Kill every EdgeSpan server process by name.

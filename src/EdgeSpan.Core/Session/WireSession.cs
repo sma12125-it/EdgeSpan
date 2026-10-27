@@ -203,6 +203,10 @@ public sealed class WireSession
                 if (Payloads.TryEdgeReturn(body, out var hx, out var hy, out var dx, out var dy))
                     result.Events.Add(new SessionEvent.EdgeReturned(hx, hy, dx, dy));
                 break;
+            case PacketType.GlowStyle:
+                if (Payloads.TryGlowShape(body, out var lineWidth, out var bend))
+                    result.Events.Add(new SessionEvent.GlowShapeReceived(lineWidth, bend));
+                break;
             case PacketType.Lock:
                 result.Events.Add(new SessionEvent.Locked(true));
                 break;

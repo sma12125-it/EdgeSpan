@@ -20,6 +20,17 @@ public sealed class UsbLink : IDisposable
 {
     private CancellationTokenSource? _cts;
 
+    private UsbConductor? _conductor;
+
+    /// <summary>Manual reconnect: the running conductor tears down and redoes adb reverse + helper + launch.</summary>
+    public bool Reconnect()
+    {
+        if (_conductor == null)
+            return false;
+        _conductor.RequestReconnect();
+        return true;
+    }
+
     public void Start(UsbHooks hooks)
     {
         Stop();
@@ -35,7 +46,7 @@ public sealed class UsbLink : IDisposable
                 return;
             }
             hooks.Trace?.Invoke("adb " + adb);
-            var conductor = new UsbConductor
+            var conductor = _conductor = new UsbConductor
             {
                 IsConnected = hooks.IsUsbConnected,
                 PairingOpen = hooks.PairingOpen,

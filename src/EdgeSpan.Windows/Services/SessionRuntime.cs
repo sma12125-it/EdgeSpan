@@ -30,6 +30,45 @@ public sealed class SessionRuntime : IDisposable
     private TcpTunnel? _tunnel;
     private UsbLink? _usb;
     private WindowsInputCapture? _input;
+    private PanicGuard? _panic;
+
+    public void PanicKeyChanged() => _panic?.Rebind();
+
+    /// <summary>
+    /// Manual "Reconnect" (Home page / tray): drops every session, brings handed-off windows home, and redoes the
+    /// transport setup (USB: adb reverse + fresh tablet helper + app launch). Can be pressed any number of times.
+    /// </summary>
+    public void Reconnect()
+    {
+        Trace("reconnect: manual (method=" + ActiveMethod + ")");
+        try { _handoff.Panic(); } catch (Exception ex) { Trace("reconnect handoff " + ex.Message); }
+        _tunnel?.DropClients();
+        Host.Reconnect();
+        if (ActiveMethod == "usb")
+        {
+            if (_usb?.Reconnect() != true)
+                BeginUsb();
+        }
+        else if (ActiveMethod is "lan" or "relay")
+            SetPhase("searching", ActiveMethod == "lan" ? "waitingPhone" : "waitingRelay");
+    }
+
+    /// <summary>
+    /// Emergency stop (panic hotkey): runs on a worker thread, never waits on the UI thread. Input is freed first
+    /// so the user gets mouse and keyboard back even if the rest hangs.
+    /// </summary>
+    public void Panic()
+    {
+        try { _input?.Panic(); } catch (Exception ex) { DiagLog.Write("panic input " + ex.Message); }
+        var homed = false;
+        try { homed = Host.Panic(); } catch (Exception ex) { DiagLog.Write("panic session " + ex.Message); }
+        if (!homed)
+            DiagLog.Write("panic: session lock busy; input already released");
+        try { _handoff.Panic(); } catch (Exception ex) { DiagLog.Write("panic handoff " + ex.Message); }
+        try { _input?.ReleaseStuckModifiers(); } catch (Exception) { }
+        try { _glow.Hide(); } catch (Exception) { }
+        DiagLog.Write("PANIC done: mouse and keyboard are back on Windows");
+    }
     private readonly EdgeGlow _glow = new();
     private readonly TransferToast _toast = new();
     private string _handoffToast = "";
@@ -123,6 +162,8 @@ public sealed class SessionRuntime : IDisposable
             TunnelError = ex.SocketErrorCode == SocketError.AddressAlreadyInUse ? "usbPortBusy" : "usbNoTunnel";
         }
         _input = new WindowsInputCapture(Host);
+        _panic = new PanicGuard(() => Host.Settings.HotkeyPanic, Panic);
+        Host.PanicHotkey = () => _panic?.Fire("input hook");
         if (OperatingSystem.IsWindows())
         {
             _clipboard = new ClipboardWatch();
@@ -131,6 +172,8 @@ public sealed class SessionRuntime : IDisposable
         }
         StartupRegistration.Apply(settings.LaunchAtStartup);
         _handoff = new HandoffHost(Host);
+        EdgeSpan.Layout.ElasticLine.Sigma = EdgeSpan.Layout.ElasticLine.SigmaFor(Host.Settings.EdgeBend);
+        EdgeGlow.LineScale = Host.Settings.EdgeLineWidth / 9.0;
         Host.DragProbe = () => _handoff.ProbeDrag();
         Host.DragHandoff = (device, edge) => _handoff.BeginDragHandoff(device, edge, ActiveMethod);
         Host.DragFailed = () => _handoff.CancelDrag();
@@ -375,6 +418,7 @@ public sealed class SessionRuntime : IDisposable
         _timer.Stop();
         _life.Cancel();
         _glow.Dispose();
+        _panic?.Dispose();
         _handoff.Dispose();
         _appStream.Dispose();
         _input?.Dispose();
@@ -403,6 +447,17 @@ public sealed class SessionRuntime : IDisposable
     public void SendWindowToTablet() => _handoff.SendForeground(ActiveMethod, useLast: true);
 
     public void SendWindowHandle(nint hwnd) => _handoff.SendWindow(hwnd, ActiveMethod);
+    public List<(uint Id, string Title, string DeviceId)> TransferredWindows() => _handoff.Transferred();
+    public void BringBackWindow(uint id) => _handoff.BringBack(id);
+    public void CloseTransferredWindow(uint id) => _handoff.CloseTransferred(id);
+
+    /// <summary>Applies the edge-line shape (width, bend) locally and sends it to every device.</summary>
+    public void ApplyGlowShape()
+    {
+        EdgeSpan.Layout.ElasticLine.Sigma = EdgeSpan.Layout.ElasticLine.SigmaFor(Host.Settings.EdgeBend);
+        EdgeGlow.LineScale = Host.Settings.EdgeLineWidth / 9.0;
+        Host.BroadcastGlow();
+    }
 
     private void Pump()
     {
@@ -457,6 +512,8 @@ public sealed class SessionRuntime : IDisposable
                 DiagLog.Write($"handoff commit id={commit.Id} device={commit.DeviceId} edge={commit.Edge}");
                 CrossCue(commit.DeviceId);
             }
+            else if (effect is Effect.GlowShapeChanged)
+                EdgeGlow.LineScale = Host.Settings.EdgeLineWidth / 9.0;
             else if (effect is Effect.WindowDragFailed failed)
                 _handoff.NoteFailure(failed.Reason);
             else if (effect is Effect.WindowDragEdge dragEdge)

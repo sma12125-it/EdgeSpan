@@ -179,12 +179,38 @@ class HandoffViewer(
         main.post { if (event.id == liveId) layout() }
     }
 
+    /** True while a handed-off window is shown here. */
+    fun isLive(): Boolean = liveId != 0L
+
+    /** PC left-button release while the pointer drags the window: the window is placed; stop following. */
+    fun pointerReleased() {
+        if (!follow || liveId == 0L) return
+        endFollow("button-up")
+    }
+
+    /** Control went back to the PC: the window must stay where it is, never follow the mouse again. */
+    fun controlLost() {
+        if (!follow || liveId == 0L) return
+        endFollow("control-lost")
+    }
+
+    private fun endFollow(why: String) {
+        follow = false
+        grabbed = false
+        val maxX = (DisplaySize.width - contentW).coerceAtLeast(0)
+        val maxY = (DisplaySize.height - contentH).coerceAtLeast(captionPx)
+        videoX = videoX.coerceIn(0, maxX)
+        videoY = videoY.coerceIn(captionPx, maxY)
+        DiagFile.stage(context, "handoff follow end ($why) at $videoX,$videoY")
+        val id = liveId
+        main.post { if (liveId == id) layout() }
+        sendGeometry(id, force = true)
+    }
+
     fun state(event: ClientEvent.HandoffState) {
         if (event.id != liveId) return
         if (event.value == HandoffPayloads.StateRestored) {
-            follow = false
-            grabbed = false
-            sendGeometry(event.id, force = true)
+            endFollow("pc-restored")
         } else if (event.value == HandoffPayloads.StateClosed) {
             drop(event.id)
         }
@@ -202,6 +228,10 @@ class HandoffViewer(
             grabX = x - videoX
             grabY = y - videoY
             grabbed = true
+        }
+        if (follow && grabbed && !control) {
+            endFollow("pointer-left")
+            return
         }
         if (!follow || finger || !control || !grabbed || liveId == 0L) return
         videoX = x - grabX
@@ -289,7 +319,21 @@ class HandoffViewer(
                 drop(id)
             }
         }
+        val back = TextView(ctx).apply {
+            text = strings["handoffReturnPc"] ?: "Return to PC"
+            setTextColor(Color.parseColor("#8FB8FF"))
+            textSize = 13f
+            setPadding(16, 0, 16, 0)
+            gravity = Gravity.CENTER
+            setOnClickListener {
+                DiagFile.stage(context, "handoff return-to-pc button id=$id")
+                actions.add { engine.handoffReturn(id) }
+                drop(id)
+            }
+        }
+        close.contentDescription = strings["closeWindow"] ?: "Close"
         caption.addView(label)
+        caption.addView(back)
         caption.addView(close)
         caption.setOnTouchListener { _, event -> onCaption(id, event) }
         val video = SurfaceView(ctx)

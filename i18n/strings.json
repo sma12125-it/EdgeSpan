@@ -405,5 +405,19 @@
   "handoffTestRunning": {"en": "Testing…", "fa": "در حال آزمایش…"},
   "sendPcStageConnecting": {"en": "Connecting to PC…", "fa": "در حال اتصال به رایانه…"},
   "sendPcStageShown": {"en": "Now showing on PC", "fa": "اکنون روی رایانه نمایش داده می‌شود"},
-  "sendPcNoDisplay": {"en": "Could not open the app in its own window on the PC: %s", "fa": "باز کردن برنامه در پنجره‌ای مستقل روی رایانه ممکن نشد: %s"}
+  "sendPcNoDisplay": {"en": "Could not open the app in its own window on the PC: %s", "fa": "باز کردن برنامه در پنجره‌ای مستقل روی رایانه ممکن نشد: %s"},
+  "edgeLineWidth": {"en": "Edge line thickness", "fa": "ضخامت خط لبه"},
+  "edgeBend": {"en": "Bend width", "fa": "پهنای خمیدگی"},
+  "edgeBendHint": {"en": "Small = a cursor-sized dent, large = a smooth curve along the whole edge. Synced with the other device.", "fa": "کم = فرورفتگی به اندازهٔ نشانگر، زیاد = منحنی نرم در تمام طول لبه. با دستگاه دیگر همگام می‌شود."},
+  "transferredTitle": {"en": "Transferred windows", "fa": "پنجره‌های منتقل‌شده"},
+  "transferredNone": {"en": "No windows are on other devices.", "fa": "هیچ پنجره‌ای روی دستگاه دیگر نیست."},
+  "bringBack": {"en": "Bring back to PC", "fa": "بازگرداندن به رایانه"},
+  "bringBackAll": {"en": "Bring all back", "fa": "بازگرداندن همه"},
+  "closeWindow": {"en": "Close", "fa": "بستن"},
+  "hotkeyPanic": {"en": "Emergency stop (panic) key", "fa": "کلید توقف اضطراری"},
+  "hotkeyPanicHint": {"en": "Stops everything EdgeSpan is doing and gives the mouse and keyboard back to Windows, even if the app hangs.", "fa": "همهٔ کارهای EdgeSpan را متوقف می‌کند و ماوس و صفحه‌کلید را به ویندوز برمی‌گرداند، حتی اگر برنامه هنگ کند."},
+  "handoffReturnPc": {"en": "Return to PC", "fa": "بازگشت به رایانه"},
+  "sendToPc": {"en": "Send to PC", "fa": "ارسال به رایانه"},
+  "reconnect": {"en": "Reconnect", "fa": "اتصال دوباره"},
+  "reconnecting": {"en": "Reconnecting…", "fa": "در حال اتصال دوباره…"}
 }

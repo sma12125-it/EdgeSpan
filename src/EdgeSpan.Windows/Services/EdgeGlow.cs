@@ -46,6 +46,9 @@ public sealed class EdgeGlow : IDisposable
     private double[] _lineW = Array.Empty<double>();
     private WndProc? _wndProc;
 
+    /// <summary>Edge-line stroke scale (setting "line thickness" / 9 px).</summary>
+    public static double LineScale { get; set; } = 1;
+
     public void Show(GlowBand band, string? color, int intensity)
     {
         if (!OperatingSystem.IsWindows())
@@ -311,8 +314,8 @@ public sealed class EdgeGlow : IDisposable
         // line thinning/stretching there with its tip clipped by the edge. Enter: stretched inward, then tears.
         var vertical = band.Edge is GlowEdge.Left or GlowEdge.Right || (band.Edge is not (GlowEdge.Top or GlowEdge.Bottom) && _height >= _width);
         var thickPx = Math.Max(1, vertical ? _width : _height);
-        var lineCore = 2.2 * _dpiScale / thickPx;
-        var lineHalo = 9.0 * _dpiScale / thickPx;
+        var lineCore = 2.2 * LineScale * _dpiScale / thickPx;
+        var lineHalo = 9.0 * LineScale * _dpiScale / thickPx;
         // The user's line colour (Settings > edge effect) - previously ignored in favour of the fixed teal accent.
         double ar = r, ag = g, ab = b;
         var n = vertical ? _height : _width;

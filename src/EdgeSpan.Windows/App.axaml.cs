@@ -18,6 +18,7 @@ public sealed class App : Application
     private NativeMenuItem? _quitItem;
     private NativeMenuItem? _sendItem;
     private NativeMenuItem? _listItem;
+    private NativeMenuItem? _backItem;
     private MainWindow? _window;
     private MainViewModel? _model;
 
@@ -64,6 +65,11 @@ public sealed class App : Application
         menu.Add(_sendItem);
         _listItem = new NativeMenuItem { Menu = new NativeMenu() };
         menu.Add(_listItem);
+        _backItem = new NativeMenuItem { Menu = new NativeMenu() };
+        menu.Add(_backItem);
+        var reconnect = new NativeMenuItem(EdgeSpan.Product.Catalog.Get(_model?.Host.Settings.Language ?? "en", "reconnect"));
+        reconnect.Click += (_, _) => _model?.ReconnectCommand.Execute(null);
+        menu.Add(reconnect);
         menu.Opening += (_, _) => FillWindowList();
         menu.Add(_quitItem);
         _tray = new TrayIcon
@@ -109,6 +115,31 @@ public sealed class App : Application
         }
         if (_listItem.Menu.Items.Count == 0)
             _listItem.Menu.Items.Add(new NativeMenuItem(EdgeSpan.Product.Catalog.Get(lang, "trayWindowNone")) { IsEnabled = false });
+        if (_backItem?.Menu == null)
+            return;
+        // "Transferred windows": everything currently on a device, each with Bring back / Close.
+        _backItem.Header = EdgeSpan.Product.Catalog.Get(lang, "transferredTitle");
+        _backItem.Menu.Items.Clear();
+        var sent = _model.TransferredWindows();
+        foreach (var (id, title, _) in sent)
+        {
+            var row = new NativeMenuItem(title) { Menu = new NativeMenu() };
+            var back = new NativeMenuItem(EdgeSpan.Product.Catalog.Get(lang, "bringBack"));
+            back.Click += (_, _) => _model?.BringBackWindow(id);
+            var close = new NativeMenuItem(EdgeSpan.Product.Catalog.Get(lang, "closeWindow"));
+            close.Click += (_, _) => _model?.CloseTransferredWindow(id);
+            row.Menu.Items.Add(back);
+            row.Menu.Items.Add(close);
+            _backItem.Menu.Items.Add(row);
+        }
+        if (sent.Count > 1)
+        {
+            var all = new NativeMenuItem(EdgeSpan.Product.Catalog.Get(lang, "bringBackAll"));
+            all.Click += (_, _) => { foreach (var w in _model!.TransferredWindows()) _model.BringBackWindow(w.Id); };
+            _backItem.Menu.Items.Add(all);
+        }
+        if (sent.Count == 0)
+            _backItem.Menu.Items.Add(new NativeMenuItem(EdgeSpan.Product.Catalog.Get(lang, "transferredNone")) { IsEnabled = false });
     }
 
     private void ShowWindow()

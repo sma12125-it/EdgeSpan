@@ -8,6 +8,7 @@ public abstract record SessionEvent
     public sealed record Scrolled(int Dx, int Dy, int X, int Y) : SessionEvent;
     public sealed record KeyChanged(ushort Vk, ushort Hid, byte Mods, bool Down, uint Codepoint) : SessionEvent;
     public sealed record ClipboardReceived(uint Id, string Text) : SessionEvent;
+    public sealed record GlowShapeReceived(int LineWidth, int Bend) : SessionEvent;
     public sealed record FileOfferReceived(uint Id, string Name, long Size, bool Cut) : SessionEvent;
     public sealed record FileChunkReceived(uint Id, long Offset, byte[] Data) : SessionEvent;
     public sealed record FileAckReceived(uint Id, long Next) : SessionEvent;

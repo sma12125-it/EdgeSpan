@@ -50,6 +50,8 @@ public sealed class AppSettings
     public string HotkeyLock { get; set; } = "Ctrl+Alt+L";
     /// <summary>Sends the foreground window to the tablet (Windows to Android handoff).</summary>
     public string HotkeySendWindow { get; set; } = "Ctrl+Alt+T";
+    /// <summary>Emergency key: cancels everything and gives mouse and keyboard back to Windows.</summary>
+    public string HotkeyPanic { get; set; } = "Ctrl+Alt+Shift+Q";
     /// <summary>Leave a small "on tablet" card where a handed-off window used to be.</summary>
     public bool HandoffPlaceholder { get; set; }
     /// <summary>Window handoff directions: "off", "pc" (PC to tablet), "phone" (phone apps to PC) or "both".</summary>
@@ -61,6 +63,10 @@ public sealed class AppSettings
     public string EdgeGlowColor { get; set; } = "#3DDC84";
     public int EdgeGlowIntensity { get; set; } = 80;
     public int EdgeGlowThickness { get; set; } = 22;
+    /// <summary>Stroke width of the edge line in px (1..20); synced to devices in GlowStyle.</summary>
+    public int EdgeLineWidth { get; set; } = 9;
+    /// <summary>Bend/tear width 0..100 (cursor-sized … full-length curve); synced to devices in GlowStyle.</summary>
+    public int EdgeBend { get; set; } = 55;
     public bool BreakthroughEnabled { get; set; } = true;
     public int BreakthroughIntensity { get; set; } = 70;
     public bool ReduceMotion { get; set; }
@@ -126,6 +132,10 @@ public static class SettingsStore
         if (settings.EdgeGlowThickness == 0)
             settings.EdgeGlowThickness = 22;
         settings.EdgeGlowThickness = Math.Clamp(settings.EdgeGlowThickness, 4, 120);
+        if (settings.EdgeLineWidth == 0)
+            settings.EdgeLineWidth = 9;
+        settings.EdgeLineWidth = Math.Clamp(settings.EdgeLineWidth, 1, 20);
+        settings.EdgeBend = Math.Clamp(settings.EdgeBend, 0, 100);
         settings.BreakthroughIntensity = Math.Clamp(settings.BreakthroughIntensity, 0, 100);
         if (string.IsNullOrWhiteSpace(settings.EdgeGlowColor))
             settings.EdgeGlowColor = "#3DDC84";

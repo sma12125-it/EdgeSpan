@@ -186,6 +186,7 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <Button Classes="primary" Content="{Binding RetryLabel}" Command="{Binding RetryConnectCommand}" IsVisible="{Binding ShowRetry}"/>
+                      <Button Classes="ghost" Content="{Binding Ui[reconnect]}" Command="{Binding ReconnectCommand}"/>
                       <Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}"/>
                     </StackPanel>
                   </StackPanel>
@@ -202,7 +203,7 @@
         <TextBlock Classes="title" Text="{Binding ConnectedTitle}"/>
         <TextBlock Classes="desc" Text="{Binding LatencyLabel}"/>
       </StackPanel>
-      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="{Binding RttText}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/><Border Background="{DynamicResource MintBrush}" CornerRadius="10" Padding="10,3" VerticalAlignment="Center"><TextBlock Text="{Binding ConnectKind}" Foreground="White" FontWeight="SemiBold"/></Border><Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}"/></WrapPanel>
+      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="{Binding RttText}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/><Border Background="{DynamicResource MintBrush}" CornerRadius="10" Padding="10,3" VerticalAlignment="Center"><TextBlock Text="{Binding ConnectKind}" Foreground="White" FontWeight="SemiBold"/></Border><Button Classes="ghost" Content="{Binding Ui[reconnect]}" Command="{Binding ReconnectCommand}"/><Button Classes="ghost" Content="{Binding SwitchMethodLabel}" Command="{Binding SwitchMethodCommand}"/></WrapPanel>
     </Grid>
   </Border>
               </StackPanel>
@@ -567,6 +568,26 @@
           <StackPanel IsVisible="{Binding ShowTransfers}">
             <TextBlock Classes="desc" Text="{Binding Ui[transfersHint]}" Margin="2,0,0,10"/>
             <Border Classes="setting">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="title" Text="{Binding Ui[transferredTitle]}"/>
+                <TextBlock Classes="desc" Text="{Binding Ui[transferredNone]}" IsVisible="{Binding !HasTransferred}"/>
+                <ItemsControl ItemsSource="{Binding Transferred}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TransferredRow">
+                      <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                        <StackPanel VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+                          <TextBlock Classes="desc" Text="{Binding Device}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Margin="8,0" Command="{Binding BringBack}" Content="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).Ui[bringBack]}"/>
+                        <Button Grid.Column="2" Classes="ghost" Command="{Binding Close}" Content="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).Ui[closeWindow]}"/>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+            <Border Classes="setting">
     <Grid ColumnDefinitions="Auto,*,Auto">
       <ContentControl Width="36" HorizontalAlignment="Left" VerticalAlignment="Center"><Path Classes="icon big" Data="M 5,3 L 3,3 L 3,17 L 15,17 L 15,3 L 13,3 M 6,1 L 12,1 L 12,5 L 6,5 Z"/></ContentControl>
       <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -741,6 +762,16 @@
     <Grid ColumnDefinitions="Auto,*,Auto">
       <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
       <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding Ui[hotkeyPanic]}"/>
+        <TextBlock Classes="desc" Text="{Binding Ui[hotkeyPanicHint]}" TextWrapping="Wrap"/>
+      </StackPanel>
+      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><TextBox Text="{Binding HotkeyPanic}" Width="180" IsReadOnly="True"/><Button Classes="ghost" Content="{Binding RecordPanicLabel}" Command="{Binding RecordPanicCommand}"/></WrapPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
         <TextBlock Classes="title" Text="{Binding DeviceNumberHotkeysLabel}"/>
         <TextBlock Classes="desc" Text="{Binding NumberHotkeysHint}"/>
       </StackPanel>
@@ -811,6 +842,29 @@
         <TextBlock Classes="title" Text="{Binding GlowThicknessLabel}"/>
       </StackPanel>
       <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><NumericUpDown Value="{Binding EdgeGlowThickness}" Minimum="4" Maximum="120" Width="140"/></WrapPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding Ui[edgeLineWidth]}"/>
+        <TextBlock Classes="desc" Text="{Binding EdgeLineWidthText}"/>
+      </StackPanel>
+      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><Slider Value="{Binding EdgeLineWidth}" Minimum="1" Maximum="20" Width="200" TickFrequency="1" IsSnapToTickEnabled="True"/></WrapPanel>
+    </Grid>
+  </Border>
+<Border Classes="setting sub">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <ContentControl Width="0" HorizontalAlignment="Left" VerticalAlignment="Center"><Panel/></ContentControl>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+        <TextBlock Classes="title" Text="{Binding Ui[edgeBend]}"/>
+        <TextBlock Classes="desc" Text="{Binding Ui[edgeBendHint]}" TextWrapping="Wrap"/>
+        <Canvas Width="360" Height="60" HorizontalAlignment="Left" Margin="0,6,0,0">
+          <Polyline Points="{Binding EdgePreview}" Stroke="{DynamicResource MintBrush}" StrokeThickness="{Binding EdgeLineWidth}" StrokeLineCap="Round"/>
+        </Canvas>
+      </StackPanel>
+      <WrapPanel Grid.Column="2" Classes="ctrl" Orientation="Horizontal" VerticalAlignment="Center"><Slider Value="{Binding EdgeBend}" Minimum="0" Maximum="100" Width="200"/></WrapPanel>
     </Grid>
   </Border>
 <Border Classes="setting sub">

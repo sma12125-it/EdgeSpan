@@ -38,6 +38,7 @@ public abstract record Effect
 {
     public sealed record Log(string Message) : Effect;
     public sealed record StateChanged : Effect;
+    public sealed record GlowShapeChanged : Effect;
     public sealed record ControlChanged(string? DeviceId, int X, int Y, int DevW = 0, int DevH = 0) : Effect;
     public sealed record ModifiersReleased : Effect;
     public sealed record HandoffAccepted(string DeviceId, uint Id, byte Codec, int ViewW, int ViewH) : Effect;
@@ -631,6 +632,8 @@ public sealed class HostController : IDisposable
 
     public void OnMouseButton(byte button, bool down)
     {
+        if (button == 0 && !down)
+            Interlocked.Increment(ref _leftUps);
         lock (_gate)
         {
             if (Machine.ActiveDeviceId is not string id || Get(id) is not { } link)
@@ -878,6 +881,69 @@ public sealed class HostController : IDisposable
         }
     }
 
+    /// <summary>Sends the current edge-line style to every connected device (after a settings change).</summary>
+    public void BroadcastGlow() { lock (_gate) BroadcastGlow(null); }
+
+    private void BroadcastGlow(Link? except)
+    {
+        foreach (var other in _links.Values)
+        {
+            if (other != except && other.Session?.Established == true)
+                SendReliable(other, PacketType.GlowStyle, Payloads.GlowStyle(Settings.EdgeGlowColor, Settings.EdgeGlowIntensity, Settings.EdgeLineWidth, Settings.EdgeBend));
+        }
+    }
+
+    /// <summary>Raised (from the hook path) when the panic chord is pressed; the Windows side does the rest.</summary>
+    public Action? PanicHotkey { get; set; }
+
+    /// <summary>
+    /// Emergency stop: control comes home, window drags and file transfers are cancelled, modifiers released.
+    /// Never blocks for long: if another thread holds the session lock (a hang), it gives up after 400 ms and
+    /// returns false so the caller can still free the input locally.
+    /// </summary>
+    public bool Panic()
+    {
+        if (!Monitor.TryEnter(_gate, 400))
+            return false;
+        try
+        {
+            HotkeyCapture = false;
+            _windowDrag = false;
+            _dragArmed = false;
+            _dragPush = 0;
+            _dragGaveUp = true;
+            if (Machine.ActiveDeviceId is string active)
+                ReturnToHost(Get(active));
+            foreach (var link in _links.Values)
+            {
+                if (link.Session?.Established == true)
+                    ReleaseModifiers(link, includeHeldKeys: true);
+            }
+            try { _files.Dispose(); } catch (Exception) { }
+            _effects.Add(new Effect.Log("panic: control home, drags and file transfers cancelled"));
+            return true;
+        }
+        finally
+        {
+            Monitor.Exit(_gate);
+        }
+    }
+
+    private long _leftUps;
+
+    /// <summary>
+    /// Count of left-button releases seen by the input hook. While the pointer is on a device the hook swallows
+    /// buttons, so GetAsyncKeyState never sees the release that ends a window drag; this counter does.
+    /// </summary>
+    public long LeftUps => Interlocked.Read(ref _leftUps);
+
+    /// <summary>True while the device has a live, established session.</summary>
+    public bool LinkLive(string deviceId)
+    {
+        lock (_gate)
+            return _links.TryGetValue(deviceId, out var l) && l.Status == "connected" && l.Session?.Established == true;
+    }
+
     public void SendHandoff(string deviceId, PacketType type, byte[] payload)
     {
         lock (_gate)
@@ -961,12 +1027,11 @@ public sealed class HostController : IDisposable
                 var addr = link.Remote?.Address.ToString() ?? link.Config.Address ?? "";
                 if (!(addr.Contains("127.0.0.1") || addr.Contains("::1")) || link.Status is not ("connected" or "paired"))
                     continue;
+                ResetLink(link, "usb-drop");
                 link.Status = "disconnected";
-                if (Machine.ActiveDeviceId == link.Config.Id)
-                    ReturnToHost(link);
-                else
-                    ReleaseModifiers(link, includeHeldKeys: true);
+                LinkLost?.Invoke(link.Config.Id);
             }
+            KeepOpenForReconnect();
             Touch();
         }
     }
@@ -976,6 +1041,8 @@ public sealed class HostController : IDisposable
         lock (_gate)
         {
             ReleaseHeldClip(nowMs);
+            if (PairingOpen && nowMs > _windowUntil && AnyDisconnected())
+                _windowUntil = nowMs + _options.PairingWindowMs; // a known device is away: keep waiting for it
             if (PairingOpen && nowMs > _windowUntil)
             {
                 PairingOpen = false;
@@ -993,11 +1060,12 @@ public sealed class HostController : IDisposable
                 {
                     link.Status = "disconnected";
                     LinkLost?.Invoke(link.Config.Id);
-                    if (Machine.ActiveDeviceId == link.Config.Id)
-                        ReturnToHost(link);
-                    else
-                        ReleaseModifiers(link, includeHeldKeys: true);
+                    ResetLink(link, "heartbeat-timeout");
+                    link.Pairing?.Dispose();
+                    link.Pairing = null;
+                    KeepOpenForReconnect();
                     Touch();
+                    continue;
                 }
                 foreach (var packet in link.Session.Poll(nowMs))
                     Enqueue(link, packet);
@@ -1306,9 +1374,13 @@ public sealed class HostController : IDisposable
     {
         if (header.Type == PacketType.PairInit)
         {
-            if (!PairingOpen || nowMs > _windowUntil || _fails >= _options.MaxPairFailures)
-                return;
             if (!Payloads.TryPairInit(payload, out var init))
+                return;
+            // A device that already paired with this PC may rejoin with the current code at any time (unlimited
+            // reconnects without reopening pairing); new devices still need the open pairing window.
+            var rejoin = !string.IsNullOrEmpty(CurrentPin) && !string.IsNullOrWhiteSpace(init.Id)
+                && Settings.Devices.Any(d => d.Id == init.Id);
+            if ((!rejoin && (!PairingOpen || nowMs > _windowUntil)) || _fails >= _options.MaxPairFailures)
                 return;
             var id = string.IsNullOrWhiteSpace(init.Id) ? Guid.NewGuid().ToString("N") : init.Id;
             var link = EnsureLink(id, string.IsNullOrWhiteSpace(init.Name) ? "Android" : init.Name, from, relayPeer);
@@ -1326,7 +1398,10 @@ public sealed class HostController : IDisposable
                 link.Pairing = null;
             }
             link.Pairing?.Dispose();
+            if (link.Session != null)
+                ResetLink(link, "new-handshake");
             link.Pairing = PairingHandshake.Create(PairRole.Host, CurrentPin, _random, NewSessionId());
+            Phase($"reconnect: handshake start device={link.Config.Id}");
             SendClear(link, link.Pairing.Consume(PacketType.PairInit, payload), nowMs, from);
             link.Status = "pairing";
             Touch();
@@ -1341,7 +1416,10 @@ public sealed class HostController : IDisposable
                 Enqueue(known, known.LastClear, from);
             return;
         }
-        if (known.Session?.Established == true && header.Type == PacketType.PairConfirm && known.LastClear != null)
+        // Replay our last answer only for a retransmit of the handshake that built the current session. After a
+        // reconnect the phone runs a NEW handshake; replaying the old confirm here stalled it forever (only an app
+        // restart, which cleared Session, recovered).
+        if (known.Session?.Established == true && known.Pairing.Established && header.Type == PacketType.PairConfirm && known.LastClear != null)
         {
             Enqueue(known, known.LastClear, from);
             return;
@@ -1365,11 +1443,77 @@ public sealed class HostController : IDisposable
             BringUp(known);
     }
 
+    /// <summary>Phase log line for the session lifecycle (shown in the log, mirrored to the diagnostics file).</summary>
+    private void Phase(string text)
+    {
+        _logs.Add(text);
+        if (_logs.Count > 200)
+            _logs.RemoveAt(0);
+        _effects.Add(new Effect.Log(text));
+    }
+
+    /// <summary>
+    /// Tears one link down to "never connected": control home, modifiers released, session keys and handshake
+    /// state dropped, route forgotten. A reconnect then rebuilds everything from scratch.
+    /// </summary>
+    private void ResetLink(Link link, string why)
+    {
+        if (Machine.ActiveDeviceId == link.Config.Id)
+            ReturnToHost(link);
+        else
+            ReleaseModifiers(link, includeHeldKeys: true);
+        link.Session = null;
+        link.LastClear = null;
+        link.Punch = null;
+        link.PeerCaps = 0;
+        link.LastRx = 0;
+        if (link.Status is "connected" or "paired" or "pairing")
+            link.Status = "disconnected";
+        Phase($"reconnect: session torn down device={link.Config.Id} reason={why}");
+    }
+
+    /// <summary>
+    /// Keeps the pairing window open with the SAME code after a link was lost, so the phone (which saved the
+    /// code) can rejoin by itself, any number of times. Max-failure protection still applies.
+    /// </summary>
+    private void KeepOpenForReconnect()
+    {
+        if (string.IsNullOrEmpty(CurrentPin))
+            CurrentPin = MakePin();
+        if (!PairingOpen)
+            Phase("reconnect: pairing re-opened for rejoin");
+        PairingOpen = true;
+        _fails = 0;
+        _windowUntil = Math.Max(_windowUntil, _clock() + _options.PairingWindowMs);
+        PairingUri = PairingLink.Build(NetAddresses.GuessLanHost(), Settings.ListenPort, CurrentPin, Settings.DisplayName);
+        Touch();
+    }
+
+    /// <summary>Manual "Reconnect": drop every live session and wait for the devices to rejoin.</summary>
+    public void Reconnect()
+    {
+        lock (_gate)
+        {
+            Phase("reconnect: manual reconnect requested");
+            foreach (var link in _links.Values)
+            {
+                link.Pairing?.Dispose();
+                link.Pairing = null;
+                ResetLink(link, "manual");
+                LinkLost?.Invoke(link.Config.Id);
+            }
+            KeepOpenForReconnect();
+        }
+    }
+
+    private bool AnyDisconnected() => _links.Values.Any(l => l.Status == "disconnected");
+
     private void BringUp(Link link)
     {
         var pairing = link.Pairing!;
         link.Session = new WireSession(true, _clock, _options);
         link.Session.Establish(pairing.SendKey!, pairing.ReceiveKey!, pairing.NoncePrefix!, pairing.SessionId);
+        Phase($"reconnect: session up device={link.Config.Id} session={pairing.SessionId:X}");
         link.Status = "paired";
         if (link.Path is not (LinkChoice.Direct or LinkChoice.Lan or LinkChoice.Pending))
         {
@@ -1425,6 +1569,19 @@ public sealed class HostController : IDisposable
                 case SessionEvent.EdgeReturned back when Machine.ActiveDeviceId == link.Config.Id:
                     _effects.Add(new Effect.Log($"edge-exit device-reported device={link.Config.Id} at=({back.DeviceX},{back.DeviceY}) model=({Machine.X},{Machine.Y}) size={link.Config.ScreenWidth}x{link.Config.ScreenHeight}"));
                     ReturnToHost(link);
+                    break;
+                case SessionEvent.GlowShapeReceived shape:
+                    if (shape.LineWidth != Settings.EdgeLineWidth || shape.Bend != Settings.EdgeBend)
+                    {
+                        // Edited on the tablet: adopt it here and pass it on to the other devices.
+                        Settings.EdgeLineWidth = shape.LineWidth;
+                        Settings.EdgeBend = shape.Bend;
+                        EdgeSpan.Layout.ElasticLine.Sigma = EdgeSpan.Layout.ElasticLine.SigmaFor(shape.Bend);
+                        _effects.Add(new Effect.Log($"glow shape from {link.Config.Id} line={shape.LineWidth} bend={shape.Bend}"));
+                        _effects.Add(new Effect.GlowShapeChanged());
+                        Save();
+                        BroadcastGlow(except: link);
+                    }
                     break;
                 case SessionEvent.ClipboardReceived clip when Settings.ClipboardShare && clip.Text != _lastClip:
                     _lastClip = clip.Text;
@@ -1488,7 +1645,7 @@ public sealed class HostController : IDisposable
         if (link != null)
         {
             link.Session?.ClearMouse();
-            SendReliable(link, PacketType.GlowStyle, Payloads.GlowStyle(Settings.EdgeGlowColor, Settings.EdgeGlowIntensity));
+            SendReliable(link, PacketType.GlowStyle, Payloads.GlowStyle(Settings.EdgeGlowColor, Settings.EdgeGlowIntensity, Settings.EdgeLineWidth, Settings.EdgeBend));
             SendReliable(link, PacketType.EdgeEnter, Payloads.EdgeEnter((byte)entered.ReturnEdge, entered.X, entered.Y, (ushort)Math.Clamp(entered.DevW, 1, 65535), (ushort)Math.Clamp(entered.DevH, 1, 65535)));
             SendFast(link, PacketType.MouseMove, Payloads.MouseMove(entered.X, entered.Y));
             ReleaseModifiers(link, includeHeldKeys: false);
@@ -1644,6 +1801,9 @@ public sealed class HostController : IDisposable
         var send = HotkeyParser.Parse(Settings.HotkeySendWindow);
         if (send.VirtualKey != 0 && HandoffPolicy.AllowsPcToPhone(Settings.Handoff) && send.Matches(virtualKey, ctrl, alt, shift, win))
             return true;
+        var panicKey = HotkeyParser.Parse(Settings.HotkeyPanic);
+        if (panicKey.VirtualKey != 0 && panicKey.Matches(virtualKey, ctrl, alt, shift, win))
+            return true;
         var locker = HotkeyParser.Parse(Settings.HotkeyLock);
         return locker.VirtualKey != 0 && locker.Matches(virtualKey, ctrl, alt, shift, win);
     }
@@ -1665,6 +1825,15 @@ public sealed class HostController : IDisposable
             {
                 ReleaseModifiers(ActiveLink(), includeHeldKeys: false);
                 JumpTo(number);
+                return true;
+            }
+            var panicKey = HotkeyParser.Parse(Settings.HotkeyPanic);
+            if (panicKey.VirtualKey != 0 && panicKey.Matches(virtualKey, ctrl, alt, shift, win))
+            {
+                // Run off the hook/session lock: the handler takes the lock itself with a timeout.
+                var panic = PanicHotkey;
+                if (panic != null)
+                    ThreadPool.QueueUserWorkItem(_ => panic());
                 return true;
             }
             var send = HotkeyParser.Parse(Settings.HotkeySendWindow);

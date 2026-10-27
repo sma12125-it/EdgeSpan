@@ -36,6 +36,8 @@ public sealed class HandoffHost : IDisposable
     private nint _offeredHwnd;
     private nint _claim;
     private volatile bool _keepDrag;
+    private long _upsAtDrag;
+    private long _lastWatch;
     private volatile bool _busy;
     private readonly Dictionary<nint, HandoffPolicy.WindowHome> _homes = new();
     private nint _buttonHwnd;
@@ -167,7 +169,7 @@ public sealed class HandoffHost : IDisposable
         lock (_gate)
             ids = _jobs.Keys.ToArray();
         foreach (var id in ids)
-            Finish(id, close: false, echo: false);
+            Finish(id, close: false, echo: true); // app exit / handoff off: every window comes home, viewers close
         try { _listener?.Stop(); } catch { /* the accept loop exits */ }
         _video = null;
         if (_hook != IntPtr.Zero)
@@ -189,6 +191,11 @@ public sealed class HandoffHost : IDisposable
             }
             if (ProbeDrag())
                 PollDrag();
+            if (Environment.TickCount64 - _lastWatch > 1000)
+            {
+                _lastWatch = Environment.TickCount64;
+                try { Watch(); } catch (Exception ex) { DiagLog.Write("handoff watch " + ex.Message); }
+            }
             Thread.Sleep(8);
         }
         if (_hook != IntPtr.Zero)
@@ -227,6 +234,110 @@ public sealed class HandoffHost : IDisposable
                 _buttonDragging = false;
             }
         }
+    }
+
+    /// <summary>
+    /// Once a second: a window whose device link has been down for 3 s comes back to the PC (original place and
+    /// size); a window that was closed on the PC side is dropped from the tablet.
+    /// </summary>
+    private void Watch()
+    {
+        Job[] jobs;
+        lock (_gate)
+            jobs = _jobs.Values.ToArray();
+        foreach (var job in jobs)
+        {
+            if (!IsWindow(job.Hwnd))
+            {
+                DiagLog.Write($"handoff window gone id={job.Id}");
+                _host.SendHandoff(job.DeviceId, PacketType.HandoffState, HandoffPayloads.WriteState(new HandoffPayloads.State(job.Id, HandoffPayloads.StateClosed)));
+                Interlocked.Exchange(ref job.Restored, 1);
+                lock (_gate)
+                {
+                    _jobs.Remove(job.Id);
+                    if (_jobs.Count == 0) _busy = false;
+                }
+                try { job.Stop?.Cancel(); } catch { }
+                PlaceholderCard.Close(job.Id);
+                continue;
+            }
+            if (_host.LinkLive(job.DeviceId))
+            {
+                job.LinkLostAt = 0;
+                continue;
+            }
+            if (job.LinkLostAt == 0)
+                job.LinkLostAt = Environment.TickCount64;
+            else if (Environment.TickCount64 - job.LinkLostAt > 3000)
+            {
+                PlaceholderCard.Close(job.Id);
+                PutBack(job, "link-lost");
+            }
+        }
+    }
+
+    /// <summary>Panic: end any drag and bring every handed-off window back on-screen at its original place.</summary>
+    public void Panic()
+    {
+        _keepDrag = false;
+        _offeredHwnd = 0;
+        _dragHwnd = 0;
+        _eventHwnd = 0;
+        Job[] jobs;
+        if (!Monitor.TryEnter(_gate, 400))
+        {
+            DiagLog.Write("panic: handoff lock busy");
+            return;
+        }
+        try { jobs = _jobs.Values.ToArray(); }
+        finally { Monitor.Exit(_gate); }
+        foreach (var job in jobs)
+        {
+            PlaceholderCard.Close(job.Id);
+            try { job.Popups?.Dismiss(); } catch (Exception) { }
+            if (PutBack(job, "panic"))
+                _host.SendHandoff(job.DeviceId, PacketType.HandoffReturn, HandoffPayloads.WriteReturn(job.Id));
+        }
+        _busy = false;
+        DiagLog.Write($"panic: {jobs.Length} handed-off window(s) brought back");
+    }
+
+    /// <summary>Windows currently shown on other devices (for the Transfers page and the tray).</summary>
+    public List<(uint Id, string Title, string DeviceId)> Transferred()
+    {
+        lock (_gate)
+            return _jobs.Values.Select(j => (j.Id, j.Title, j.DeviceId)).ToList();
+    }
+
+    /// <summary>"Bring back to PC": original position and size on the PC, viewer closed on the device.</summary>
+    public void BringBack(uint id)
+    {
+        Job? job;
+        lock (_gate)
+            _jobs.TryGetValue(id, out job);
+        if (job == null)
+            return;
+        PlaceholderCard.Close(job.Id);
+        try { job.Popups?.Dismiss(); } catch (Exception) { }
+        if (PutBack(job, "bring-back"))
+        {
+            _host.SendHandoff(job.DeviceId, PacketType.HandoffReturn, HandoffPayloads.WriteReturn(job.Id));
+            if (OperatingSystem.IsWindows())
+                SetForegroundWindow(job.Hwnd);
+        }
+    }
+
+    /// <summary>"Close": closes the app window and the viewer on the device.</summary>
+    public void CloseTransferred(uint id)
+    {
+        Job? job;
+        lock (_gate)
+            _jobs.TryGetValue(id, out job);
+        if (job == null)
+            return;
+        _host.SendHandoff(job.DeviceId, PacketType.HandoffState, HandoffPayloads.WriteState(new HandoffPayloads.State(job.Id, HandoffPayloads.StateClosed)));
+        Interlocked.Exchange(ref job.FramesSent, Math.Max(1, Volatile.Read(ref job.FramesSent)));
+        Finish(job, close: true, echo: false);
     }
 
     private void PollDrag()
@@ -403,7 +514,22 @@ public sealed class HandoffHost : IDisposable
             }
             try { job.Stop?.Cancel(); } catch { /* already stopped */ }
             if (OperatingSystem.IsWindows())
+            {
                 PostMessage(job.Hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero);
+                var hwnd = job.Hwnd;
+                var home = job.Home;
+                // An app that asks "save changes?" keeps its window: bring it (and the prompt) back on the PC
+                // instead of leaving it parked off-screen where nobody can answer.
+                _ = Task.Delay(1500).ContinueWith(_ =>
+                {
+                    if (IsWindow(hwnd) && IsWindowVisible(hwnd))
+                    {
+                        var ok = SetWindowPos(hwnd, IntPtr.Zero, home.Left, home.Top, home.Right - home.Left, home.Bottom - home.Top, 0x0004 | 0x0010);
+                        DiagLog.Write($"handoff close kept the window open; restored {ok}");
+                        SetForegroundWindow(hwnd);
+                    }
+                });
+            }
             return;
         }
         if (PutBack(job, close ? "closed-before-frame" : "failure") && echo)
@@ -520,6 +646,8 @@ public sealed class HandoffHost : IDisposable
         public int DeviceH;
         public int Offset;
         public long GeometryAt;
+        public string Title = "";
+        public long LinkLostAt;
         public volatile bool NeedIdr = true;
         public volatile bool LoggedNoStream;
         public int FramesSent;
@@ -534,7 +662,11 @@ public sealed class HandoffHost : IDisposable
     {
         if (_keepDrag && _offeredHwnd != 0)
         {
-            if (!OperatingSystem.IsWindows() || (GetAsyncKeyState(0x01) & 0x8000) != 0)
+            // The release usually happens while the pointer is on the tablet, where the hook swallows it, so
+            // GetAsyncKeyState stays "down" until the pointer comes back. The hook's own release counter ends
+            // the drag the moment the button goes up, wherever the pointer is.
+            var released = _host.LeftUps != Interlocked.Read(ref _upsAtDrag);
+            if (!released && (!OperatingSystem.IsWindows() || (GetAsyncKeyState(0x01) & 0x8000) != 0))
             {
                 _host.WindowDrag = true;
                 return true;
@@ -603,6 +735,7 @@ public sealed class HandoffHost : IDisposable
             }
             _busy = true;
         }
+        Interlocked.Exchange(ref _upsAtDrag, _host.LeftUps);
         _keepDrag = true;
         DiagLog.Write("handoff cancel " + CancelWindow(hwnd));
         if (!GetWindowRect(hwnd, out var home))
@@ -651,6 +784,7 @@ public sealed class HandoffHost : IDisposable
                 Home = home,
                 ViewW = winW,
                 ViewH = winH,
+                Title = name,
                 DeviceW = placed?.ScreenWidth ?? 1600,
                 DeviceH = placed?.ScreenHeight ?? 1000,
                 Offset = placed?.OffsetPx ?? 0
@@ -895,6 +1029,10 @@ public sealed class HandoffHost : IDisposable
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsWindow(nint hwnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(nint hwnd);
 
     private static string CancelWindow(nint hwnd)
     {

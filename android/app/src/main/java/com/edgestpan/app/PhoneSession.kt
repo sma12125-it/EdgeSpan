@@ -10,6 +10,7 @@ import android.view.InputDevice
 import com.edgestpan.protocol.ClientEngine
 import com.edgestpan.protocol.ClientEvent
 import com.edgestpan.protocol.GlowPolicy
+import com.edgestpan.protocol.ElasticLine
 import com.edgestpan.protocol.DatagramFrames
 import com.edgestpan.protocol.DiscoveryCodec
 import com.edgestpan.protocol.FrameReader
@@ -39,7 +40,32 @@ class PhoneSession(
     private var failureKey = "pairTimeout"
     private var failureText = "No computer answered. Open pairing on the PC and try again."
 
+    @Volatile private var ranLive = false
+
+    /**
+     * Runs sessions until stopped. After a session has been live once, any drop (USB, Wi-Fi, relay) is followed by
+     * a fresh attempt with backoff, unlimited times: every attempt builds a new engine, socket and handshake.
+     */
     fun run() {
+        var everLive = false
+        var attempt = 0
+        while (!stop.get()) {
+            ranLive = false
+            Log.i(TAG, "session phase=start attempt=$attempt")
+            runOnce()
+            if (ranLive) { everLive = true; attempt = 0 }
+            if (stop.get()) { Log.i(TAG, "session phase=stopped"); return }
+            if (!everLive) return // first-time failure: surface the error as before
+            attempt++
+            val wait = minOf(1_000L shl minOf(attempt - 1, 4), 15_000L)
+            Log.i(TAG, "session phase=reconnect attempt=$attempt in ${wait}ms")
+            val strings = loadStrings(context.getSharedPreferences("edgestpan", Context.MODE_PRIVATE).getString("lang", "en") ?: "en")
+            say(strings, "working", "reconnecting", strings["reconnecting"] ?: "Reconnecting…")
+            try { Thread.sleep(wait) } catch (_: InterruptedException) { return }
+        }
+    }
+
+    private fun runOnce() {
         val prefs = context.getSharedPreferences("edgestpan", Context.MODE_PRIVATE)
         val strings = loadStrings(prefs.getString("lang", "en") ?: "en")
         try {
@@ -188,6 +214,7 @@ class PhoneSession(
             else -> "Connected on the local network."
         }
         say(strings, "ok", okKey, okText)
+        ranLive = true
         Log.i(TAG, "pairing-ok $method")
         live.pump(stop, width, height, method)
         live.close()
@@ -589,7 +616,15 @@ class PhoneSession(
                 if (prefs.getBoolean("diagnostics", false)) counter.update(line)
                 Log.d(TAG, "input-trace buttons=$buttons wheels=$wheels")
             }
-            EdgeGlowOverlay.serverFinger = {
+            var viewerRef: HandoffViewer? = null
+            EdgeGlowOverlay.serverFinger = finger@{
+                // A touch "outside" the overlay while a handed-off window is shown and the PC pointer drives the
+                // tablet is the viewer itself, not the user's finger: never exit control (= random edge exit).
+                if (viewerRef?.isLive() == true && engine.hasControl) {
+                    Log.i(TAG, "finger ignored: handoff viewer live, PC pointer has control")
+                    return@finger
+                }
+                Log.i(TAG, "control release reason=finger x=${engine.x} y=${engine.y}")
                 glow.hide()
                 glowState = GlowPolicy.touch(glowState.edge)
                 if (!local) {
@@ -610,6 +645,9 @@ class PhoneSession(
             val viewer = HandoffViewer(context, engine, method, loadStrings(lang), { flush() }, { key ->
                 handoffFailed(prefs, lang, key)
             }, { if (viaRelay) null else peerHost() })
+            viewerRef = viewer
+            GlowLink.apply(prefs)
+            GlowLink.send = { engine.glowStyle(prefs.getInt("glowColor", 0xFF4F8CFF.toInt()), prefs.getInt("glowIntensity", 70), prefs.getInt("glowLine", 9), prefs.getInt("glowBend", 55)); flush() }
             engine.onEvent = onEvent@{ event ->
                 pipe.onEvent(event)
                 val now = SystemClock.elapsedRealtime()
@@ -630,7 +668,8 @@ class PhoneSession(
                         }
                     }
                     is ClientEvent.EdgeReturned -> {
-                        Log.i(TAG, "edge-return edge=${event.edge}")
+                        Log.i(TAG, "edge-return edge=${event.edge} at x=${engine.x} y=${engine.y}")
+                        viewer.controlLost()
                         injector.releaseModifiers()
                         glowState = GlowPolicy.leave(event.edge, glowState.finger)
                         local = true
@@ -647,6 +686,7 @@ class PhoneSession(
                     is ClientEvent.Button -> {
                         buttons++
                         publishTrace()
+                        if (event.button == 0 && !event.down) viewer.pointerReleased()
                         EdgeGlowOverlay.ignore()
                     }
                     is ClientEvent.Scroll -> {
@@ -664,7 +704,16 @@ class PhoneSession(
                     is ClientEvent.HandoffGeometry -> viewer.geometry(event)
                     is ClientEvent.HandoffState -> viewer.state(event)
                     is ClientEvent.HandoffReturned -> viewer.returned(event)
-                    is ClientEvent.GlowStyle -> prefs.edit().putInt("glowColor", event.argb).putInt("glowIntensity", event.intensity).apply()
+                    is ClientEvent.GlowStyle -> {
+                        val e = prefs.edit().putInt("glowColor", event.argb).putInt("glowIntensity", event.intensity)
+                        if (event.hasShape) {
+                            e.putInt("glowLine", event.lineWidth).putInt("glowBend", event.bend)
+                            ElasticLine.Sigma = ElasticLine.sigmaFor(event.bend)
+                            Log.i(TAG, "glow shape from pc line=${event.lineWidth} bend=${event.bend}")
+                        }
+                        e.apply()
+                        GlowLink.apply(prefs)
+                    }
                     is ClientEvent.HostHello -> {
                         if ((event.caps and 0x08) != 0 && wantsHandoff(prefs)) engine.setHandoffPc(true)
                         prefs.edit().putInt("hostLicense", event.license).putInt("hostLicenseDays", event.days).apply()
@@ -760,6 +809,9 @@ class PhoneSession(
             glow.close()
             injector.close()
             counter.close()
+            GlowLink.send = null
+            EdgeGlowOverlay.serverFinger = {}
+            Log.i(TAG, "session phase=torn-down method=$method")
         }
 
         private fun stringsTemplate(): String {

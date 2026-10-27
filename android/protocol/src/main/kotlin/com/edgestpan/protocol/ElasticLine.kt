@@ -18,7 +18,11 @@ object ElasticLine {
     const val ENTER = 1
     const val DurationMs = 460.0
     const val TearMs = 170.0
-    const val Sigma = 0.075
+    const val DefaultSigma = 0.075
+    /** Bend/tear width of the line, set from the synced EdgeBend setting (0..100). */
+    @Volatile var Sigma = DefaultSigma
+    /** Same mapping as the PC: 0 = cursor-sized dent, 100 = a curve along the full edge. */
+    fun sigmaFor(bend: Int): Double = 0.01 * Math.pow(60.0, bend.coerceIn(0, 100) / 100.0)
     const val ExitDepth = 0.62
     const val EnterDepth = 0.68
     const val Accent = 0xFF14B8A6.toInt()

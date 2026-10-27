@@ -41,7 +41,7 @@ private class ShellContext : ContextWrapper(null) {
  */
 class AppStreamServer(private val port: Int = 27185) {
     fun start() {
-        val server = ServerSocket(port, 2, InetAddress.getByName("127.0.0.1"))
+        val server = bindLoopback(port, 2)
         Thread({
             while (true) {
                 val client = runCatching { server.accept() }.getOrNull() ?: break

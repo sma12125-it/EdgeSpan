@@ -38,7 +38,7 @@ class InjectionServer(
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
-        socket = ServerSocket(port, 1, InetAddress.getByName("127.0.0.1"))
+        socket = bindLoopback(port, 1)
         Thread({
             while (running.get()) {
                 val client = try { socket?.accept() } catch (_: Exception) { null } ?: break

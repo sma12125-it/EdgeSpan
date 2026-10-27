@@ -18,7 +18,16 @@ public static class ElasticLine
 {
     public const double DurationMs = 460;
     public const double TearMs = 170;
-    public const double Sigma = 0.075;
+    public const double DefaultSigma = 0.075;
+
+    /// <summary>Width of the bend along the edge (Gaussian sigma, fraction of the edge length); set from <see cref="SigmaFor"/>.</summary>
+    public static double Sigma { get; set; } = DefaultSigma;
+
+    /// <summary>
+    /// Bend/tear width setting 0..100 → sigma: 0 = a cursor-sized segment (~1% of the edge) breaks, 100 = the
+    /// whole line bends in one smooth curve. 55 ≈ the original fixed 0.075.
+    /// </summary>
+    public static double SigmaFor(int bend) => 0.01 * Math.Pow(60.0, Math.Clamp(bend, 0, 100) / 100.0);
     public const double ExitDepth = 0.62;
     public const double EnterDepth = 0.68;
     public const uint Accent = 0x14B8A6;
@@ -28,8 +37,10 @@ public static class ElasticLine
     private static readonly double ExitPeak = FindExitPeak();
 
     /// <summary>Gaussian bell centered on the crossing point; along and cross are 0..1 along the edge.</summary>
-    public static double Bell(double along, double cross, double sigma = Sigma)
+    public static double Bell(double along, double cross, double sigma = -1)
     {
+        if (sigma <= 0)
+            sigma = Sigma;
         var d = along - cross;
         return Math.Exp(-(d * d) / (2 * sigma * sigma));
     }

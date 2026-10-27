@@ -45,6 +45,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.ui.platform.LocalConfiguration
@@ -548,6 +549,50 @@ private fun Home(strings: Map<String, String>, name: String, backend: String, st
             EButton(onClick = { onSave(name, link, mode); onStart() }, colors = ButtonDefaults.buttonColors(containerColor = Blue)) { Text(strings["startService"] ?: "Start") }
             EOutlined(onClick = onStop) { Text(strings["stop"] ?: "Stop") }
         }
+        val ctx = LocalContext.current
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            EButton(onClick = {
+                ctx.startActivity(android.content.Intent(ctx, SendToPcActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            }, colors = ButtonDefaults.buttonColors(containerColor = Blue)) { Text(strings["sendToPc"] ?: "Send to PC") }
+            EOutlined(onClick = {
+                DiagFile.stage(ctx, "reconnect button")
+                ctx.startForegroundService(android.content.Intent(ctx, SessionService::class.java).putExtra("restart", true))
+            }) { Text(strings["reconnect"] ?: "Reconnect") }
+        }
+    }
+}
+
+/** Edge-line thickness and bend sliders: saved on release, sent to the PC, live preview. */
+@Composable
+private fun GlowShape(strings: Map<String, String>, mark: () -> Unit) {
+    val ctx = LocalContext.current
+    val prefs = ctx.getSharedPreferences("edgestpan", android.content.Context.MODE_PRIVATE)
+    var line by remember { mutableStateOf(prefs.getInt("glowLine", 9).toFloat()) }
+    var bend by remember { mutableStateOf(prefs.getInt("glowBend", 55).toFloat()) }
+    val save = {
+        prefs.edit().putInt("glowLine", line.toInt()).putInt("glowBend", bend.toInt()).apply()
+        GlowLink.apply(prefs)
+        GlowLink.send?.invoke()
+        mark()
+    }
+    Text((strings["edgeLineWidth"] ?: "Edge line thickness") + "  " + line.toInt(), color = Muted())
+    Slider(value = line, onValueChange = { line = it }, valueRange = 1f..20f, steps = 18, onValueChangeFinished = save)
+    Text((strings["edgeBend"] ?: "Bend width") + "  " + bend.toInt(), color = Muted())
+    Slider(value = bend, onValueChange = { bend = it }, valueRange = 0f..100f, onValueChangeFinished = save)
+    Text(strings["edgeBendHint"] ?: "", color = Muted(), fontSize = 12.sp)
+    val color = MaterialTheme.colorScheme.primary
+    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(48.dp)) {
+        val sigma = com.edgestpan.protocol.ElasticLine.sigmaFor(bend.toInt())
+        val path = androidx.compose.ui.graphics.Path()
+        val n = 80
+        for (i in 0..n) {
+            val t = i / n.toDouble()
+            val d = (t - 0.5) / sigma
+            val y = size.height * (0.85f - 0.6f * Math.exp(-0.5 * d * d).toFloat())
+            val x = size.width * t.toFloat()
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = line * 0.6f * density))
     }
 }
 
@@ -605,6 +650,7 @@ private fun Settings(strings: Map<String, String>, rtl: Boolean, dark: Boolean, 
         Card {
             Flag(strings["edgeGlowPhone"] ?: "Glow", edgeGlow) { flag("edgeGlow", it) }
             Flag(strings["breakthrough"] ?: "Breakthrough", breakthrough) { flag("breakthrough", it) }
+            GlowShape(strings, mark)
             Text(strings["imeNote"] ?: "", color = Muted(), fontSize = 12.sp)
         }
         Section(tx(rtl, "Clipboard & files", "کلیپ‌بورد و فایل‌ها"))

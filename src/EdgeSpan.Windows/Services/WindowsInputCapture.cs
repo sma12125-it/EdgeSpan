@@ -138,6 +138,29 @@ public sealed class WindowsInputCapture : IDisposable
             UnhookWindowsHookEx(key);
     }
 
+    /// <summary>
+    /// Panic: drop both low-level hooks and any cursor clip right now, from the calling thread (works when the
+    /// hook thread is hung), show the cursor, stop blocking legacy mouse input. The hooks come back after 5 s
+    /// with control on the PC, so EdgeSpan keeps working afterwards.
+    /// </summary>
+    public void Panic()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        Interlocked.Exchange(ref _tripped, 3);
+        UnhookInstalled();
+        ClipCursor(IntPtr.Zero);
+        ShowCursorBalanced(false);
+        if (_threadId != 0)
+            PostThreadMessage(_threadId, WmApp, IntPtr.Zero, IntPtr.Zero);
+        DiagLog.Write("panic: input hooks removed, cursor clip cleared, cursor shown");
+        _ = Task.Delay(5000).ContinueWith(_ =>
+        {
+            if (Interlocked.CompareExchange(ref _tripped, 1, 3) == 3)
+                DiagLog.Write("panic: input hooks re-arming");
+        });
+    }
+
     private void Watch()
     {
         while (!_stop)
@@ -763,6 +786,9 @@ public sealed class WindowsInputCapture : IDisposable
 
     [DllImport("user32.dll")]
     private static extern int ShowCursor(bool show);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClipCursor(IntPtr rect);
 
     [DllImport("user32.dll")]
     private static extern IntPtr LoadCursor(IntPtr instance, IntPtr cursor);

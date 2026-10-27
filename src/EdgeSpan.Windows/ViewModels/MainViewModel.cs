@@ -11,6 +11,16 @@ using EdgeSpan.Windows.Services;
 
 namespace EdgeSpan.Windows.ViewModels;
 
+/// <summary>A window currently shown on another device (Transfers page).</summary>
+public sealed class TransferredRow
+{
+    public uint Id { get; init; }
+    public string Title { get; init; } = "";
+    public string Device { get; init; } = "";
+    public RelayCommand BringBack { get; init; } = null!;
+    public RelayCommand Close { get; init; } = null!;
+}
+
 public sealed class DeviceRow : INotifyPropertyChanged
 {
     public DeviceRow(string id) => Id = id;
@@ -99,12 +109,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ChooseLanCommand = new RelayCommand(() => { _runtime.BeginLan(); Pull(); });
         ChooseRelayCommand = new RelayCommand(ChooseRelay);
         RetryConnectCommand = new RelayCommand(RetryConnect);
+        ReconnectCommand = new RelayCommand(() => { _runtime.Reconnect(); Pull(); });
         SwitchMethodCommand = new RelayCommand(() => { _runtime.StopLink(); Pull(); });
         CopyPinCommand = new RelayCommand(CopyPin);
         ActivateCommand = new RelayCommand(Activate);
         LockCommand = new RelayCommand(() => { _runtime.Host.ToggleLock(); Pull(); });
         CycleCommand = new RelayCommand(() => { _runtime.Host.Cycle(); Pull(); });
         RecordHotkeyCommand = new RelayCommand(BeginHotkeyCapture);
+        RecordPanicCommand = new RelayCommand(() => { BeginHotkeyCapture(); _capturePanic = true; RecordPanicLabel = Catalog.Get(_runtime.Host.Settings.Language, "hotkeyRecording"); Notify(nameof(RecordPanicLabel)); });
         OpenSamsungCommand = new RelayCommand(OpenSamsung);
         ExportLogCommand = new RelayCommand(ExportLog);
         SimulateLeaveCommand = new RelayCommand(SimulateLeave);
@@ -134,6 +146,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void SendWindowToTablet() => _runtime.SendWindowToTablet();
 
     public void SendWindowHandle(nint hwnd) => _runtime.SendWindowHandle(hwnd);
+    public List<(uint Id, string Title, string DeviceId)> TransferredWindows() => _runtime.TransferredWindows();
+    public void BringBackWindow(uint id) { _runtime.BringBackWindow(id); _transferSig = ""; }
+    public void CloseTransferredWindow(uint id) { _runtime.CloseTransferredWindow(id); _transferSig = ""; }
     public ObservableCollection<DeviceRow> Devices { get; } = new();
     public ObservableCollection<PeerRow> Peers { get; } = new();
     public ObservableCollection<string> Logs { get; } = new();
@@ -224,6 +239,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand LockCommand { get; }
     public RelayCommand CycleCommand { get; }
     public RelayCommand RecordHotkeyCommand { get; }
+    public RelayCommand ReconnectCommand { get; } = null!;
+    public RelayCommand RecordPanicCommand { get; } = null!;
+    private bool _capturePanic;
+    private string _hotkeyPanic = "Ctrl+Alt+Shift+Q";
+    /// <summary>Emergency "panic" chord (key-capture control, auto-saved).</summary>
+    public string HotkeyPanic { get => _hotkeyPanic; set { _hotkeyPanic = value ?? ""; Notify(nameof(HotkeyPanic)); } }
+    public string RecordPanicLabel { get; private set; } = "";
     public RelayCommand OpenSamsungCommand { get; }
     public RelayCommand ExportLogCommand { get; }
     public RelayCommand SimulateLeaveCommand { get; }
@@ -245,8 +267,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool ShowSaved => _savedAt > 0 && Environment.TickCount64 - _savedAt < 1800;
 
     private string SettingsSig() => string.Join("\u001f", DisplayName, ListenPort, ClipboardShare, FileTransfer, LaunchAtStartup,
-        HotkeySwitch, HotkeyLock, HotkeySwitchEnabled, DeviceNumberHotkeys, EdgeGlowEnabled, EdgeGlowColor, EdgeGlowIntensity,
-        EdgeGlowThickness, BreakthroughEnabled, BreakthroughIntensity, ReduceMotion, SoundEnabled, InternetEnabled, HandoffPc, HandoffPlaceholder, HandoffPhone,
+        HotkeySwitch, HotkeyLock, HotkeyPanic, HotkeySwitchEnabled, DeviceNumberHotkeys, EdgeGlowEnabled, EdgeGlowColor, EdgeGlowIntensity,
+        EdgeGlowThickness, EdgeLineWidth, EdgeBend, BreakthroughEnabled, BreakthroughIntensity, ReduceMotion, SoundEnabled, InternetEnabled, HandoffPc, HandoffPlaceholder, HandoffPhone,
         RelayUrl, StunHost, StunPort, PublicHost, PublicPort);
 
     private string DeviceSig() => _selected == null ? "" : string.Join("\u001f", _selected.Id, EditName, EditAddress, EditPort,
@@ -271,6 +293,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private void AutosaveTick()
     {
         var now = Environment.TickCount64;
+        if (++_tickCount % 10 == 0)
+            RefreshTransferred();
+        // Edited on the tablet (GlowStyle from the device): show it here without re-saving.
+        var shape = _runtime.Host.Settings.EdgeLineWidth * 1000 + _runtime.Host.Settings.EdgeBend;
+        if (_shapeSeen >= 0 && shape != _shapeSeen && (int)EdgeLineWidth * 1000 + (int)EdgeBend == _shapeSeen)
+        {
+            EdgeLineWidth = _runtime.Host.Settings.EdgeLineWidth;
+            EdgeBend = _runtime.Host.Settings.EdgeBend;
+            _settingsSig = SettingsSig();
+        }
+        _shapeSeen = shape;
         if (_settingsSig.Length == 0)
         {
             ResetAutosave();
@@ -483,6 +516,57 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand<string> PickGlowColorCommand { get; } = null!;
     public decimal? EdgeGlowIntensity { get; set; } = 80;
     public decimal? EdgeGlowThickness { get; set; } = 22;
+    private double _edgeLineWidth = 9;
+    private double _edgeBend = 55;
+    /// <summary>Edge line stroke width (px), slider 1..20, auto-saved and synced.</summary>
+    public double EdgeLineWidth { get => _edgeLineWidth; set { _edgeLineWidth = Math.Round(value); Notify(nameof(EdgeLineWidth)); Notify(nameof(EdgePreview)); Notify(nameof(EdgeLineWidthText)); } }
+    /// <summary>Bend/tear width, slider 0 (cursor-sized) .. 100 (whole line curves), auto-saved and synced.</summary>
+    public double EdgeBend { get => _edgeBend; set { _edgeBend = Math.Round(value); Notify(nameof(EdgeBend)); Notify(nameof(EdgePreview)); Notify(nameof(EdgeBendText)); } }
+    public string EdgeLineWidthText => $"{EdgeLineWidth:0} px";
+    public string EdgeBendText => $"{EdgeBend:0}";
+    /// <summary>Live preview of the bent line at the middle of the edge (360×60 canvas).</summary>
+    public IList<Avalonia.Point> EdgePreview
+    {
+        get
+        {
+            var sigma = EdgeSpan.Layout.ElasticLine.SigmaFor((int)EdgeBend);
+            var pts = new List<Avalonia.Point>();
+            for (var i = 0; i <= 120; i++)
+            {
+                var a = i / 120.0;
+                pts.Add(new Avalonia.Point(a * 360, 12 + 36 * EdgeSpan.Layout.ElasticLine.Bell(a, 0.5, sigma)));
+            }
+            return pts;
+        }
+    }
+    public ObservableCollection<TransferredRow> Transferred { get; } = new();
+    public bool HasTransferred => Transferred.Count > 0;
+    private string _transferSig = "";
+    private int _shapeSeen = -1;
+    private int _tickCount;
+
+    private void RefreshTransferred()
+    {
+        var list = _runtime.TransferredWindows();
+        var sig = string.Join(",", list.Select(w => w.Id + w.Title));
+        if (sig == _transferSig)
+            return;
+        _transferSig = sig;
+        Transferred.Clear();
+        foreach (var (id, title, device) in list)
+        {
+            var name = _runtime.Host.Settings.Devices.FirstOrDefault(d => d.Id == device)?.Name ?? device;
+            Transferred.Add(new TransferredRow
+            {
+                Id = id,
+                Title = title,
+                Device = name,
+                BringBack = new RelayCommand(() => { _runtime.BringBackWindow(id); _transferSig = ""; }),
+                Close = new RelayCommand(() => { _runtime.CloseTransferredWindow(id); _transferSig = ""; })
+            });
+        }
+        Notify(nameof(HasTransferred));
+    }
     public bool BreakthroughEnabled { get; set; } = true;
     public decimal? BreakthroughIntensity { get; set; } = 70;
     public bool ReduceMotion { get; set; }
@@ -1007,6 +1091,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         FileTransfer = s.FileTransfer;
         LaunchAtStartup = s.LaunchAtStartup;
         HotkeySwitch = s.HotkeySwitch;
+        HotkeyPanic = s.HotkeyPanic;
+        RecordPanicLabel = Catalog.Get(s.Language, "hotkeyRecord");
+        Notify(nameof(RecordPanicLabel));
         HotkeyLock = s.HotkeyLock;
         HotkeySwitchEnabled = s.HotkeySwitchEnabled;
         DeviceNumberHotkeys = s.DeviceNumberHotkeys;
@@ -1014,6 +1101,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         EdgeGlowColor = s.EdgeGlowColor;
         EdgeGlowIntensity = s.EdgeGlowIntensity;
         EdgeGlowThickness = s.EdgeGlowThickness;
+        EdgeLineWidth = s.EdgeLineWidth;
+        EdgeBend = s.EdgeBend;
         BreakthroughEnabled = s.BreakthroughEnabled;
         BreakthroughIntensity = s.BreakthroughIntensity;
         ReduceMotion = s.ReduceMotion;
@@ -1164,11 +1253,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
             HasHotkeyConflict = false;
         }
         s.HotkeySwitchEnabled = HotkeySwitchEnabled;
+        if (EdgeSpan.Input.HotkeyParser.Parse(HotkeyPanic).VirtualKey != 0 && s.HotkeyPanic != HotkeyPanic.Trim())
+        {
+            s.HotkeyPanic = HotkeyPanic.Trim();
+            _runtime.PanicKeyChanged();
+        }
         s.DeviceNumberHotkeys = DeviceNumberHotkeys;
         s.EdgeGlowEnabled = EdgeGlowEnabled;
         s.EdgeGlowColor = string.IsNullOrWhiteSpace(EdgeGlowColor) ? "#3DDC84" : EdgeGlowColor.Trim();
         s.EdgeGlowIntensity = (int)Math.Clamp(EdgeGlowIntensity ?? s.EdgeGlowIntensity, 0, 100);
         s.EdgeGlowThickness = (int)Math.Clamp(EdgeGlowThickness ?? s.EdgeGlowThickness, 4, 120);
+        var shapeChanged = s.EdgeLineWidth != (int)EdgeLineWidth || s.EdgeBend != (int)EdgeBend;
+        s.EdgeLineWidth = (int)Math.Clamp(EdgeLineWidth, 1, 20);
+        s.EdgeBend = (int)Math.Clamp(EdgeBend, 0, 100);
+        _shapeSeen = s.EdgeLineWidth * 1000 + s.EdgeBend;
         s.BreakthroughEnabled = BreakthroughEnabled;
         s.BreakthroughIntensity = (int)Math.Clamp(BreakthroughIntensity ?? s.BreakthroughIntensity, 0, 100);
         s.ReduceMotion = ReduceMotion;
@@ -1189,6 +1287,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         s.PublicHost = string.IsNullOrWhiteSpace(PublicHost) ? "" : PublicHost.Trim();
         s.PublicPort = (int)Math.Clamp(PublicPort ?? 0, 0, 65535);
         _runtime.Host.Save();
+        if (shapeChanged)
+            _runtime.ApplyGlowShape();
         _runtime.NotifySettingsChanged();
         SavedText = HasHotkeyConflict ? HotkeyConflict : Catalog.Get(s.Language, "settingsSaved");
         SwitchShortcutLine = Catalog.Format(s.Language, "switchShortcut", s.HotkeySwitch);
@@ -1210,6 +1310,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public void BeginHotkeyCapture()
     {
+        _capturePanic = false;
         RecordingHotkey = true;
         _runtime.Host.HotkeyCapture = true;
         RecordHotkeyLabel = Catalog.Get(_runtime.Host.Settings.Language, "hotkeyRecording");
@@ -1219,6 +1320,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public void CommitHotkey(string chord)
     {
+        if (_capturePanic)
+        {
+            _capturePanic = false;
+            RecordingHotkey = false;
+            _runtime.Host.HotkeyCapture = false;
+            var parsed = EdgeSpan.Input.HotkeyParser.Parse(chord);
+            // A panic key needs at least two modifiers so it cannot fire while typing.
+            if (parsed.VirtualKey != 0 && (parsed.Ctrl ? 1 : 0) + (parsed.Alt ? 1 : 0) + (parsed.Shift ? 1 : 0) + (parsed.Win ? 1 : 0) >= 2)
+                HotkeyPanic = chord;
+            RecordPanicLabel = Catalog.Get(_runtime.Host.Settings.Language, "hotkeyRecord");
+            Notify(nameof(RecordingHotkey));
+            Notify(nameof(RecordPanicLabel));
+            return;
+        }
         RecordingHotkey = false;
         _runtime.Host.HotkeyCapture = false;
         HotkeySwitch = chord;
@@ -1243,6 +1358,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public void CancelHotkeyCapture()
     {
+        _capturePanic = false;
+        RecordPanicLabel = Catalog.Get(_runtime.Host.Settings.Language, "hotkeyRecord");
+        Notify(nameof(RecordPanicLabel));
         RecordingHotkey = false;
         _runtime.Host.HotkeyCapture = false;
         RecordHotkeyLabel = Catalog.Get(_runtime.Host.Settings.Language, "hotkeyRecord");

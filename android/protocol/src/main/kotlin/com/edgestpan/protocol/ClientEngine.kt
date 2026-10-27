@@ -18,7 +18,7 @@ sealed class ClientEvent {
     data class HandoffState(val id: Long, val value: Int) : ClientEvent()
     data class HandoffReturned(val id: Long) : ClientEvent()
     data class HandoffRejected(val id: Long, val reason: String) : ClientEvent()
-    data class GlowStyle(val argb: Int, val intensity: Int) : ClientEvent()
+    data class GlowStyle(val argb: Int, val intensity: Int, val lineWidth: Int = 9, val bend: Int = 55, val hasShape: Boolean = false) : ClientEvent()
     data class HostHello(val caps: Int, val license: Int, val days: Int) : ClientEvent()
 }
 
@@ -190,6 +190,13 @@ class ClientEngine(
         post(PacketType.HandoffGeometry, HandoffPayloads.writeGeometry(id, x, y, physW, physH, (physW / d).toInt(), (physH / d).toInt()))
     }
 
+    /** Sends this device's edge-line settings to the PC (6-byte GlowStyle; old PCs read only the first 4). */
+    fun glowStyle(argb: Int, intensity: Int, lineWidth: Int, bend: Int) {
+        post(PacketType.GlowStyle, byteArrayOf(
+            (argb shr 16).toByte(), (argb shr 8).toByte(), argb.toByte(),
+            intensity.coerceIn(0, 100).toByte(), lineWidth.coerceIn(1, 20).toByte(), bend.coerceIn(0, 100).toByte()))
+    }
+
     fun handoffState(id: Long, value: Int) {
         if (!canHandoff()) return
         post(PacketType.HandoffState, HandoffPayloads.writeState(id, value))
@@ -283,7 +290,10 @@ class ClientEngine(
             PacketType.Unlock -> { locked = false; onEvent(ClientEvent.Locked(false)) }
             PacketType.GlowStyle -> if (body.size >= 4) {
                 val argb = (0xFF shl 24) or ((body[0].toInt() and 0xFF) shl 16) or ((body[1].toInt() and 0xFF) shl 8) or (body[2].toInt() and 0xFF)
-                onEvent(ClientEvent.GlowStyle(argb, body[3].toInt() and 0xFF))
+                val shape = body.size >= 6
+                onEvent(ClientEvent.GlowStyle(argb, body[3].toInt() and 0xFF,
+                    if (shape) (body[4].toInt() and 0xFF).coerceIn(1, 20) else 9,
+                    if (shape) (body[5].toInt() and 0xFF).coerceIn(0, 100) else 55, shape))
             }
             PacketType.Hello -> if (body.size >= 2) {
                 peerCaps = body.u8(1)

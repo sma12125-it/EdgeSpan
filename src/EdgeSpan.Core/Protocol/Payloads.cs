@@ -262,10 +262,26 @@ public static class Payloads
         return true;
     }
 
-    public static byte[] GlowStyle(string? hex, int intensity)
+    /// <summary>
+    /// GlowStyle (0x52): r, g, b, intensity, then (0.9.22+) line width px and bend 0..100. Older readers take the
+    /// first 4 bytes and ignore the rest; older senders omit them.
+    /// </summary>
+    public static byte[] GlowStyle(string? hex, int intensity, int lineWidth = 9, int bend = 55)
     {
         var (r, g, b) = EdgeSpan.Layout.GlowBand.ParseColor(hex);
-        return new[] { r, g, b, (byte)Math.Clamp(intensity, 0, 100) };
+        return new[] { r, g, b, (byte)Math.Clamp(intensity, 0, 100), (byte)Math.Clamp(lineWidth, 1, 20), (byte)Math.Clamp(bend, 0, 100) };
+    }
+
+    /// <summary>Line width and bend from a GlowStyle payload sent by a device (needs the 6-byte form).</summary>
+    public static bool TryGlowShape(ReadOnlySpan<byte> payload, out int lineWidth, out int bend)
+    {
+        lineWidth = 9;
+        bend = 55;
+        if (payload.Length < 6)
+            return false;
+        lineWidth = Math.Clamp((int)payload[4], 1, 20);
+        bend = Math.Clamp((int)payload[5], 0, 100);
+        return true;
     }
 
     public static byte[] EdgeEnter(byte returnEdge, int x, int y, ushort width, ushort height)
