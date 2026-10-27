@@ -384,7 +384,7 @@ public sealed class HostController : IDisposable
         lock (_gate)
         {
             if (Machine.ActiveDeviceId == id)
-                ReturnToHost(Get(id));
+                ReturnToHost(Get(id), "device-removed");
             else if (_links.TryGetValue(id, out var dropping))
                 ReleaseModifiers(dropping, includeHeldKeys: true);
             Settings.Devices.RemoveAll(d => d.Id == id);
@@ -913,7 +913,7 @@ public sealed class HostController : IDisposable
             _dragPush = 0;
             _dragGaveUp = true;
             if (Machine.ActiveDeviceId is string active)
-                ReturnToHost(Get(active));
+                ReturnToHost(Get(active), "panic-or-hotkey");
             foreach (var link in _links.Values)
             {
                 if (link.Session?.Established == true)
@@ -1459,7 +1459,7 @@ public sealed class HostController : IDisposable
     private void ResetLink(Link link, string why)
     {
         if (Machine.ActiveDeviceId == link.Config.Id)
-            ReturnToHost(link);
+            ReturnToHost(link, "reset-link " + why);
         else
             ReleaseModifiers(link, includeHeldKeys: true);
         link.Session = null;
@@ -1568,7 +1568,7 @@ public sealed class HostController : IDisposable
                     break;
                 case SessionEvent.EdgeReturned back when Machine.ActiveDeviceId == link.Config.Id:
                     _effects.Add(new Effect.Log($"edge-exit device-reported device={link.Config.Id} at=({back.DeviceX},{back.DeviceY}) model=({Machine.X},{Machine.Y}) size={link.Config.ScreenWidth}x{link.Config.ScreenHeight}"));
-                    ReturnToHost(link);
+                    ReturnToHost(link, "device-edge");
                     break;
                 case SessionEvent.GlowShapeReceived shape:
                     if (shape.LineWidth != Settings.EdgeLineWidth || shape.Bend != Settings.EdgeBend)
@@ -1628,7 +1628,7 @@ public sealed class HostController : IDisposable
                 case SessionEvent.GoodbyeReceived:
                     link.Status = "disconnected";
                     if (Machine.ActiveDeviceId == link.Config.Id)
-                        ReturnToHost(link);
+                        ReturnToHost(link, "goodbye");
                     else
                         ReleaseModifiers(link, includeHeldKeys: true);
                     Touch();
@@ -1657,8 +1657,9 @@ public sealed class HostController : IDisposable
         Touch();
     }
 
-    private void ReturnToHost(Link? link)
+    private void ReturnToHost(Link? link, string why)
     {
+        _effects.Add(new Effect.Log($"control-release why={why} device={link?.Config.Id ?? Machine.ActiveDeviceId} model=({Machine.X},{Machine.Y})"));
         ReleaseModifiers(link, includeHeldKeys: true);
         var transition = Machine.ReturnFromCurrent();
         if (transition is Transition.Return returned)
@@ -1770,7 +1771,7 @@ public sealed class HostController : IDisposable
     {
         if (!_homeSaved)
         {
-            ReturnToHost(link);
+            ReturnToHost(link, "return-home");
             return;
         }
         var devX = Machine.X;

@@ -419,5 +419,16 @@
   "handoffReturnPc": {"en": "Return to PC", "fa": "بازگشت به رایانه"},
   "sendToPc": {"en": "Send to PC", "fa": "ارسال به رایانه"},
   "reconnect": {"en": "Reconnect", "fa": "اتصال دوباره"},
-  "reconnecting": {"en": "Reconnecting…", "fa": "در حال اتصال دوباره…"}
+  "reconnecting": {"en": "Reconnecting…", "fa": "در حال اتصال دوباره…"},
+  "sendToPcNeedLink": {"en": "Connect to the PC first.", "fa": "اول به کامپیوتر وصل شوید."},
+  "sendToPcNeedHandoff": {"en": "Turn on window handoff on the PC to send apps.", "fa": "برای ارسال برنامه، انتقال پنجره را روی کامپیوتر روشن کنید."},
+  "navSendApp": {"en": "Send app", "fa": "ارسال برنامه"},
+  "vddBannerTitle": {"en": "Recommended: install the EdgeSpan virtual display", "fa": "پیشنهاد: نمایشگر مجازی EdgeSpan را نصب کنید"},
+  "vddBannerBody": {"en": "Without it, sent windows are mirrored off-screen and some apps (Calculator, This PC, UWP apps) cannot be controlled from the tablet. The virtual display (open-source signed IddCx driver) adds a real monitor at the tablet resolution, so sent apps get real mouse and keyboard input. Needs administrator approval once.", "fa": "بدون آن، پنجره‌های ارسالی خارج از صفحه بازتاب می‌شوند و برخی برنامه‌ها (ماشین‌حساب، This PC، برنامه‌های UWP) از تبلت قابل کنترل نیستند. نمایشگر مجازی (درایور متن‌باز و امضاشدهٔ IddCx) یک مانیتور واقعی با رزولوشن تبلت اضافه می‌کند تا برنامه‌ها ورودی واقعی موس و کیبورد بگیرند. یک بار تأیید مدیر سیستم لازم است."},
+  "vddInstall": {"en": "Install virtual display", "fa": "نصب نمایشگر مجازی"},
+  "vddInstalling": {"en": "Installing… approve the Windows prompt.", "fa": "در حال نصب… درخواست ویندوز را تأیید کنید."},
+  "vddInstalled": {"en": "Virtual display installed.", "fa": "نمایشگر مجازی نصب شد."},
+  "vddInstalledPending": {"en": "Driver installed; the display will appear in a few seconds (or after a restart).", "fa": "درایور نصب شد؛ نمایشگر تا چند ثانیه دیگر (یا پس از راه‌اندازی مجدد) ظاهر می‌شود."},
+  "vddInstallFailed": {"en": "Install failed or was cancelled:", "fa": "نصب ناموفق بود یا لغو شد:"},
+  "vddActive": {"en": "Virtual display active: sent windows run on a real monitor with real input.", "fa": "نمایشگر مجازی فعال است: پنجره‌های ارسالی روی مانیتور واقعی با ورودی واقعی اجرا می‌شوند."}
 }

@@ -194,8 +194,11 @@ fun EdgeSpanApp(
                         strings["navArrange"] ?: tx(rtl, "Arrange", "چیدمان"),
                         strings["navDevices"] ?: tx(rtl, "Devices", "دستگاه‌ها"),
                         strings["navTransfers"] ?: tx(rtl, "Transfers", "انتقال‌ها"),
-                        strings["settings"] ?: tx(rtl, "Settings", "تنظیمات")
+                        strings["settings"] ?: tx(rtl, "Settings", "تنظیمات"),
+                        strings["navSendApp"] ?: tx(rtl, "Send app", "ارسال برنامه")
                     )
+                    val navCtx = LocalContext.current
+                    val pick: (Int) -> Unit = { index -> if (index == 5) openSendToPc(navCtx) else tab = index }
                     val content: @Composable (Modifier) -> Unit = { mod ->
                         Box(mod) {
                             AnimatedContent(tab, transitionSpec = {
@@ -222,7 +225,7 @@ fun EdgeSpanApp(
                                 labels.forEachIndexed { index, label ->
                                     NavigationRailItem(
                                         selected = tab == index,
-                                        onClick = { tab = index },
+                                        onClick = { pick(index) },
                                         label = { Text(label, fontSize = 12.sp) },
                                         icon = { StrokeIcon(index, if (tab == index) MaterialTheme.colorScheme.primary else Muted()) },
                                         colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
@@ -238,7 +241,7 @@ fun EdgeSpanApp(
                                 labels.forEachIndexed { index, label ->
                                     NavigationBarItem(
                                         selected = tab == index,
-                                        onClick = { tab = index },
+                                        onClick = { pick(index) },
                                         label = { Text(label, fontSize = 11.sp, maxLines = 1) },
                                         icon = { StrokeIcon(index, if (tab == index) MaterialTheme.colorScheme.primary else Muted()) },
                                         colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
@@ -298,6 +301,7 @@ private fun Connect(
     Debounced(stun, stun0, onStun)
     Debounced(direct, direct0, onDirect)
     PageColumn(if (compact) 8.dp else 14.dp) {
+        SendBar(strings, connected, handoffPc)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Mark()
             Column {
@@ -560,6 +564,36 @@ private fun Home(strings: Map<String, String>, name: String, backend: String, st
             }) { Text(strings["reconnect"] ?: "Reconnect") }
         }
     }
+}
+
+/**
+ * "Send to PC" — always the first thing on the Home (Connect) page. 0.9.22 put it in Home(), a composable that is
+ * never shown (tab 0 renders Connect), so it never appeared. Disabled with the reason when it cannot work.
+ */
+@Composable
+private fun SendBar(strings: Map<String, String>, connected: Boolean, handoffPc: Boolean) {
+    val ctx = LocalContext.current
+    val ready = connected && handoffPc
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            EButton(onClick = { openSendToPc(ctx) }, colors = ButtonDefaults.buttonColors(containerColor = Blue), modifier = Modifier.weight(1f), enabled = ready) {
+                Text(strings["sendToPc"] ?: "Send to PC")
+            }
+            EOutlined(onClick = {
+                DiagFile.stage(ctx, "reconnect button")
+                ctx.startForegroundService(android.content.Intent(ctx, SessionService::class.java).putExtra("restart", true))
+            }) { Text(strings["reconnect"] ?: "Reconnect") }
+        }
+        if (!ready) Text(
+            if (!connected) strings["sendToPcNeedLink"] ?: "Connect to the PC first." else strings["sendToPcNeedHandoff"] ?: "Turn on “PC windows on the tablet” in Settings.",
+            color = Muted(), fontSize = 12.sp
+        )
+    }
+}
+
+internal fun openSendToPc(ctx: android.content.Context) {
+    DiagFile.stage(ctx, "send-to-pc opened from app")
+    ctx.startActivity(android.content.Intent(ctx, SendToPcActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 /** Edge-line thickness and bend sliders: saved on release, sent to the PC, live preview. */
@@ -825,11 +859,11 @@ private fun Flag(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun EButton(onClick: () -> Unit, modifier: Modifier = Modifier, colors: ButtonColors = ButtonDefaults.buttonColors(), content: @Composable RowScope.() -> Unit) {
+private fun EButton(onClick: () -> Unit, modifier: Modifier = Modifier, colors: ButtonColors = ButtonDefaults.buttonColors(), enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed && !LocalReduce.current) 0.97f else 1f, spring(dampingRatio = 0.92f, stiffness = 1540f), label = "press")
-    Button(onClick = onClick, modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale }, colors = colors, interactionSource = source, content = content)
+    Button(onClick = onClick, modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale }, colors = colors, enabled = enabled, interactionSource = source, content = content)
 }
 
 @Composable

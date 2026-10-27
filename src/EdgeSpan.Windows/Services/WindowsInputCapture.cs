@@ -271,6 +271,9 @@ public sealed class WindowsInputCapture : IDisposable
             var header = Marshal.PtrToStructure<RawInputHeader>(buffer);
             if (header.Type != 0)
                 return;
+            // Our own SendInput (virtual-monitor handoff) has no device; never feed it back into the engine.
+            if (header.Device == IntPtr.Zero && Environment.TickCount64 - Volatile.Read(ref VirtualDisplay.LastInjectAt) < 1000)
+                return;
             var mouseBytes = new byte[size - headerSize];
             Marshal.Copy(IntPtr.Add(buffer, headerSize), mouseBytes, 0, mouseBytes.Length);
             if (!RawMouseLayout.TryRead(mouseBytes, out var dx, out var dy, out var buttonFlags, out var buttonData))
@@ -297,6 +300,8 @@ public sealed class WindowsInputCapture : IDisposable
             var data = Marshal.PtrToStructure<MouseHookStruct>(lParam);
             var msg = (int)wParam;
             var injected = (data.Flags & 0x01) != 0;
+            if (injected && data.Extra == VirtualDisplay.InjectTag)
+                return CallNextHookEx(_mouseHook, code, wParam, lParam);
             var remote = _host.DeviceHasControl;
             var raw = Volatile.Read(ref _rawSeen) != 0;
             if (!remote)

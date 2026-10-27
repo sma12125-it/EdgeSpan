@@ -110,6 +110,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ChooseRelayCommand = new RelayCommand(ChooseRelay);
         RetryConnectCommand = new RelayCommand(RetryConnect);
         ReconnectCommand = new RelayCommand(() => { _runtime.Reconnect(); Pull(); });
+        InstallVddCommand = new RelayCommand(InstallVdd);
         SwitchMethodCommand = new RelayCommand(() => { _runtime.StopLink(); Pull(); });
         CopyPinCommand = new RelayCommand(CopyPin);
         ActivateCommand = new RelayCommand(Activate);
@@ -240,6 +241,56 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand CycleCommand { get; }
     public RelayCommand RecordHotkeyCommand { get; }
     public RelayCommand ReconnectCommand { get; } = null!;
+    public RelayCommand InstallVddCommand { get; } = null!;
+    public bool VddMissing { get; private set; }
+    public bool VddActive { get; private set; }
+    public string VddStatus { get; private set; } = "";
+    private string _vddArranged = "";
+
+    private void InstallVdd()
+    {
+        var host = _runtime.Host;
+        var lang = host.Settings.Language;
+        var dev = host.Settings.Devices.FirstOrDefault();
+        VddStatus = Catalog.Get(lang, "vddInstalling");
+        Notify(nameof(VddStatus));
+        var w = dev?.ScreenWidth ?? 1920;
+        var h = dev?.ScreenHeight ?? 1200;
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            var ok = EdgeSpan.Windows.Services.VirtualDisplay.RequestInstall(w, h, out var error);
+            Thread.Sleep(3000);
+            var found = EdgeSpan.Windows.Services.VirtualDisplay.Find(fresh: true) != null;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                VddStatus = found ? Catalog.Get(lang, "vddInstalled") : ok ? Catalog.Get(lang, "vddInstalledPending") : Catalog.Get(lang, "vddInstallFailed") + " " + error;
+                _vddArranged = "";
+                Notify(nameof(VddStatus));
+                Pull();
+            });
+        });
+    }
+
+    private void PullVdd()
+    {
+        var host = _runtime.Host;
+        var vdd = EdgeSpan.Windows.Services.VirtualDisplay.Find();
+        var dev = host.Settings.Devices.FirstOrDefault();
+        if (VddMissing != (vdd == null)) { VddMissing = vdd == null; Notify(nameof(VddMissing)); }
+        if (VddActive != (vdd != null)) { VddActive = vdd != null; Notify(nameof(VddActive)); }
+        if (vdd != null && dev != null)
+        {
+            var left = string.Equals(dev.PcEdge, "Left", StringComparison.OrdinalIgnoreCase);
+            var sig = $"{left}|{dev.ScreenWidth}x{dev.ScreenHeight}";
+            if (sig != _vddArranged)
+            {
+                _vddArranged = sig;
+                var w = dev.ScreenWidth;
+                var h = dev.ScreenHeight;
+                System.Threading.Tasks.Task.Run(() => EdgeSpan.Windows.Services.VirtualDisplay.Arrange(left, w, h));
+            }
+        }
+    }
     public RelayCommand RecordPanicCommand { get; } = null!;
     private bool _capturePanic;
     private string _hotkeyPanic = "Ctrl+Alt+Shift+Q";
@@ -777,6 +828,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         LayoutDevices = snaps;
         ActiveDeviceId = host.Machine.ActiveDeviceId;
         Monitors = host.SnapshotMonitors();
+        PullVdd();
         ArrangeNote = BuildArrangeNote(host, lang);
         var seen = snaps.Select(s => s.Id).ToHashSet();
         for (var i = Devices.Count - 1; i >= 0; i--)

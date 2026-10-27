@@ -87,6 +87,15 @@ jobs:
         run: |
           Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile "$env:RUNNER_TEMP\pt.zip"
           Expand-Archive "$env:RUNNER_TEMP\pt.zip" -DestinationPath "$env:RUNNER_TEMP\ptwin"
+      - name: Fetch Virtual Display Driver (MIT, signed by upstream)
+        shell: pwsh
+        run: |
+          # VirtualDrivers/Virtual-Display-Driver 25.7.23, x64 driver-only package (signed IddCx driver, MIT license).
+          $url = "https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/25.7.23/VirtualDisplayDriver-x86.Driver.Only.zip"
+          Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP\vdd.zip"
+          $hash = (Get-FileHash "$env:RUNNER_TEMP\vdd.zip" -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne "e24210692b442b39af763536330ce78b423f19342b7a7792c26de3944e418b3a") { throw "VDD hash mismatch $hash" }
+          Expand-Archive "$env:RUNNER_TEMP\vdd.zip" -DestinationPath "$env:RUNNER_TEMP\vdd"
       - name: Install NSIS
         shell: pwsh
         run: |
@@ -98,6 +107,7 @@ jobs:
         shell: bash
         run: |
           export EDGESPAN_ADB_DIR="$(cygpath -u "$RUNNER_TEMP")/ptwin/platform-tools"
+          export EDGESPAN_VDD_DIR="$(cygpath -u "$RUNNER_TEMP")/vdd/VirtualDisplayDriver"
           bash scripts/publish-windows.sh
           test -f "publish/EdgeSpan-Setup-$VERSION.exe"
           ls -la publish/win-x64 "publish/EdgeSpan-Setup-$VERSION.exe"

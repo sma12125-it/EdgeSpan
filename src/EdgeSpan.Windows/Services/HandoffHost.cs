@@ -99,6 +99,11 @@ public sealed class HandoffHost : IDisposable
         }
         if (!OperatingSystem.IsWindows())
             return;
+        if (job.Virtual != null)
+        {
+            DiagLog.Write($"handoff geometry phys={geometry.PhysW}x{geometry.PhysH} (virtual monitor: window stays maximised)");
+            return;
+        }
         var dpi = (int)GetDpiForWindow(job.Hwnd);
         var (w, h) = HandoffPolicy.WindowSize(geometry.PhysW, geometry.PhysH, geometry.DipW, geometry.DipH, dpi);
         DiagLog.Write($"handoff geometry phys={geometry.PhysW}x{geometry.PhysH} dip={geometry.DipW}x{geometry.DipH} pcDpi={dpi} window={w}x{h}");
@@ -437,7 +442,10 @@ public sealed class HandoffHost : IDisposable
         }
         job.Popups ??= new HandoffPopups(job.Hwnd);
         var popups = job.Popups;
-        WindowEncoder.Overlay = () =>
+        WindowEncoder.Monitor = job.Virtual?.Monitor ?? 0;
+        if (job.Virtual != null)
+            DiagLog.Write("handoff capture: virtual monitor " + job.Virtual.Value.Device);
+        WindowEncoder.Overlay = job.Virtual != null ? null : () =>
         {
             var open = popups.Current();
             if (open.Count == 0)
@@ -524,6 +532,7 @@ public sealed class HandoffHost : IDisposable
                 {
                     if (IsWindow(hwnd) && IsWindowVisible(hwnd))
                     {
+                        VirtualDisplay.Leave(hwnd);
                         var ok = SetWindowPos(hwnd, IntPtr.Zero, home.Left, home.Top, home.Right - home.Left, home.Bottom - home.Top, 0x0004 | 0x0010);
                         DiagLog.Write($"handoff close kept the window open; restored {ok}");
                         SetForegroundWindow(hwnd);
@@ -554,6 +563,7 @@ public sealed class HandoffHost : IDisposable
         try { job.Stop?.Cancel(); } catch { /* already stopped */ }
         if (!OperatingSystem.IsWindows())
             return true;
+        VirtualDisplay.Leave(job.Hwnd);
         var placed = SetWindowPos(job.Hwnd, IntPtr.Zero, job.Home.Left, job.Home.Top, job.Home.Right - job.Home.Left, job.Home.Bottom - job.Home.Top, 0x0004 | 0x0010);
         DiagLog.Write($"handoff restore {placed} at {job.Home.Left},{job.Home.Top} {why}");
         return true;
@@ -562,6 +572,11 @@ public sealed class HandoffHost : IDisposable
     private static void Post(Job job, Effect.HandoffInput input)
     {
         var hwnd = job.Hwnd;
+        if (job.Virtual is { } vs)
+        {
+            PostReal(job, vs, input);
+            return;
+        }
         if (input.Kind == HandoffPayloads.InputText)
         {
             foreach (var ch in input.Text)
@@ -633,6 +648,36 @@ public sealed class HandoffHost : IDisposable
             PostMessage(hwnd, input.Down ? down : up, input.Down ? (IntPtr)mk : IntPtr.Zero, packed);
     }
 
+    /// <summary>Real input on the virtual monitor: the tablet view maps 1:1 onto the monitor rect.</summary>
+    private static void PostReal(Job job, VirtualDisplay.Screen s, Effect.HandoffInput input)
+    {
+        if (input.Kind == HandoffPayloads.InputText)
+        {
+            VirtualDisplay.Text(input.Text, job.Hwnd);
+            return;
+        }
+        if (input.Kind == HandoffPayloads.InputKey)
+        {
+            VirtualDisplay.Key(input.Vk, input.Down, job.Hwnd);
+            return;
+        }
+        var x = s.Left + Math.Clamp(input.X * s.Width / Math.Max(1, job.ViewW), 0, s.Width - 1);
+        var y = s.Top + Math.Clamp(input.Y * s.Height / Math.Max(1, job.ViewH), 0, s.Height - 1);
+        if (input.Kind == HandoffPayloads.InputWheel)
+        {
+            var ctrl = (input.Button & HandoffPayloads.WheelCtrl) != 0;
+            if (ctrl) VirtualDisplay.Key(0x11, true, job.Hwnd);
+            if (input.WheelY != 0) VirtualDisplay.Wheel(x, y, input.WheelY, false);
+            if (input.WheelX != 0) VirtualDisplay.Wheel(x, y, input.WheelX, true);
+            if (ctrl) VirtualDisplay.Key(0x11, false, job.Hwnd);
+            return;
+        }
+        if (input.Kind == HandoffPayloads.InputMove)
+            VirtualDisplay.MouseMove(x, y);
+        else
+            VirtualDisplay.MouseButton(x, y, input.Button == 0 ? 1 : input.Button, input.Down);
+    }
+
     private sealed class Job
     {
         public uint Id;
@@ -656,6 +701,8 @@ public sealed class HandoffHost : IDisposable
         public CancellationTokenSource? Stop;
         public Thread? Encoder;
         public HandoffPopups? Popups;
+        /// <summary>Set when the window lives maximised on the EdgeSpan virtual monitor (real input, monitor capture).</summary>
+        public VirtualDisplay.Screen? Virtual;
     }
 
     public bool ProbeDrag()
@@ -747,9 +794,11 @@ public sealed class HandoffHost : IDisposable
             return;
         }
         home = RememberHome(hwnd, home);
-        Park(hwnd, edge, home);
-        var winW = Math.Max(1, home.Right - home.Left);
-        var winH = Math.Max(1, home.Bottom - home.Top);
+        var onVirtual = VirtualDisplay.Place(hwnd);
+        if (onVirtual == null)
+            Park(hwnd, edge, home);
+        var winW = onVirtual?.Width ?? Math.Max(1, home.Right - home.Left);
+        var winH = onVirtual?.Height ?? Math.Max(1, home.Bottom - home.Top);
         var dpi = GetDpiForWindow(hwnd);
         if (dpi == 0) dpi = 96;
         var title = new StringBuilder(180);
@@ -759,6 +808,7 @@ public sealed class HandoffHost : IDisposable
         if (id == 0)
         {
             _keepDrag = false;
+            VirtualDisplay.Leave(hwnd);
             var restored = SetWindowPos(hwnd, IntPtr.Zero, home.Left, home.Top, home.Right - home.Left, home.Bottom - home.Top, 0x0004 | 0x0010);
             ClearBusy();
             var key = string.IsNullOrEmpty(_host.DragFailureKey) ? "handoffNoLink" : _host.DragFailureKey;
@@ -787,7 +837,8 @@ public sealed class HandoffHost : IDisposable
                 Title = name,
                 DeviceW = placed?.ScreenWidth ?? 1600,
                 DeviceH = placed?.ScreenHeight ?? 1000,
-                Offset = placed?.OffsetPx ?? 0
+                Offset = placed?.OffsetPx ?? 0,
+                Virtual = onVirtual
             };
         }
         DiagLog.Write($"handoff parked id={id} {winW}x{winH} title={name}");

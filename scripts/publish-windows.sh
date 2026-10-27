@@ -23,11 +23,17 @@ adb_src="${EDGESPAN_ADB_DIR:-/tmp/edgestpan-ptwin/platform-tools}"
 if [[ -f "$adb_src/adb.exe" ]]; then
   cp "$adb_src/adb.exe" "$adb_src/AdbWinApi.dll" "$adb_src/AdbWinUsbApi.dll" "$out/"
 fi
+vdd_src="${EDGESPAN_VDD_DIR:-}"
+if [[ -n "$vdd_src" && -f "$vdd_src/MttVDD.inf" ]]; then
+  mkdir -p "$out/vdd"
+  cp -f "$vdd_src"/MttVDD.inf "$vdd_src"/MttVDD.dll "$vdd_src"/mttvdd.cat "$vdd_src"/vdd_settings.xml "$out/vdd/"
+fi
 echo "Published EdgeSpan.exe to $out"
 stage="$root/publish/win-x64"
 if [[ "$out" != "$stage" ]]; then
   mkdir -p "$stage"
   cp -f "$out/EdgeSpan.exe" "$stage/EdgeSpan.exe"
+  if [[ -d "$out/vdd" ]]; then mkdir -p "$stage/vdd"; cp -f "$out"/vdd/* "$stage/vdd/"; fi
   for extra in adb.exe AdbWinApi.dll AdbWinUsbApi.dll edgestpan-server.dex; do
     if [[ -f "$out/$extra" ]]; then
       cp -f "$out/$extra" "$stage/$extra"

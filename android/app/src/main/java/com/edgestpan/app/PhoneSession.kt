@@ -631,6 +631,7 @@ class PhoneSession(
                     local = true
                     quietUntil = SystemClock.elapsedRealtime() + 400
                     injector.hidePointer()
+                    if (engine.hasControl) Log.i(TAG, "control-release why=tablet-touch at=(${engine.x},${engine.y})")
                     engine.releaseControl()
                     flush()
                 }
@@ -743,6 +744,7 @@ class PhoneSession(
                     Log.w(TAG, "link-lost $method: no packets for 6 s")
                     if (engine.hasControl) {
                         local = true
+                        Log.i(TAG, "control-release why=link-lost at=(${engine.x},${engine.y})")
                         engine.releaseControl()
                     }
                     glow.hide()
@@ -756,6 +758,7 @@ class PhoneSession(
                     injector.hidePointer()
                     if (engine.hasControl) {
                         local = true
+                        Log.i(TAG, "control-release why=inject-alert at=(${engine.x},${engine.y})")
                         engine.releaseControl()
                         flush()
                     }

@@ -189,7 +189,17 @@ class InjectionServer(
             system.pointer(lastX, lastY, buttons, wheel)
             return
         }
-        for (report in Uhid.relativeMouse(dx, dy, buttons, wheel))
+        // The UHID mouse is relative and Android applies its own pointer acceleration, so the visible pointer
+        // drifts from the PC's (exact) coordinates; exits then looked random. Whenever the PC position touches a
+        // screen edge, push the real pointer hard into the same edge: it clamps there, so "PC at edge" always
+        // means "pointer at edge" and drift never survives an edge contact.
+        var sx = dx
+        var sy = dy
+        if (lastX <= 0 && dx <= 0) sx = dx - width
+        else if (lastX >= width - 1 && dx >= 0) sx = dx + width
+        if (lastY <= 0 && dy <= 0) sy = dy - height
+        else if (lastY >= height - 1 && dy >= 0) sy = dy + height
+        for (report in Uhid.relativeMouse(sx, sy, buttons, wheel))
             mouse.write(Uhid.input2(report))
     }
 

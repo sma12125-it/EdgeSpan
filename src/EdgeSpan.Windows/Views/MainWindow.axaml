@@ -193,6 +193,17 @@
                 </Border>
               </StackPanel>
               <StackPanel Spacing="3" IsVisible="{Binding ShowConnectedView}">
+                <Border Classes="card" Padding="12" IsVisible="{Binding VddMissing}">
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding Ui[vddBannerTitle]}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding Ui[vddBannerBody]}" Classes="desc" TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Classes="primary" Content="{Binding Ui[vddInstall]}" Command="{Binding InstallVddCommand}"/>
+                      <TextBlock Text="{Binding VddStatus}" Classes="desc" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+                <TextBlock Text="{Binding Ui[vddActive]}" Classes="desc" IsVisible="{Binding VddActive}"/>
                 <Border Classes="card" Padding="8" Height="230" Margin="0,0,0,5">
                   <c:LinkSketch Method="{Binding ActiveMethod}" Phase="connected"/>
                 </Border>

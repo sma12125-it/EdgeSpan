@@ -21,7 +21,12 @@ public static class CaptureInterop
     public static IDirect3DDevice? DeviceFromAbi(IntPtr pointer) =>
         pointer == IntPtr.Zero ? null : MarshalInterface<IDirect3DDevice>.FromAbi(pointer);
 
-    public static GraphicsCaptureItem CreateItemForWindow(IntPtr hwnd)
+    public static GraphicsCaptureItem CreateItemForWindow(IntPtr hwnd) => CreateItem(hwnd, false);
+
+    /// <summary>Whole-monitor capture (used for the EdgeSpan virtual display: popups, menus and UWP content included).</summary>
+    public static GraphicsCaptureItem CreateItemForMonitor(IntPtr hmonitor) => CreateItem(hmonitor, true);
+
+    private static GraphicsCaptureItem CreateItem(IntPtr handle, bool monitor)
     {
         var className = "Windows.Graphics.Capture.GraphicsCaptureItem";
         var factoryIid = FactoryIid;
@@ -32,7 +37,11 @@ public static class CaptureInterop
             Must(RoGetActivationFactory(name, ref factoryIid, out var factoryPtr));
             var factory = (IGraphicsCaptureItemInterop)Marshal.GetObjectForIUnknown(factoryPtr);
             Marshal.Release(factoryPtr);
-            Must(factory.CreateForWindow(hwnd, ref itemIid, out var itemPtr));
+            IntPtr itemPtr;
+            if (monitor)
+                Must(factory.CreateForMonitor(handle, ref itemIid, out itemPtr));
+            else
+                Must(factory.CreateForWindow(handle, ref itemIid, out itemPtr));
             try
             {
                 var item = ItemFromAbi(itemPtr);
@@ -82,6 +91,9 @@ public static class CaptureInterop
     {
         [PreserveSig]
         int CreateForWindow(IntPtr window, ref Guid iid, out IntPtr result);
+
+        [PreserveSig]
+        int CreateForMonitor(IntPtr monitor, ref Guid iid, out IntPtr result);
     }
 
     [DllImport("combase.dll", PreserveSig = true)]

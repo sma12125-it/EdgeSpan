@@ -23,6 +23,10 @@ UninstPage instfiles
 Section "EdgeSpan"
   SetOutPath "$INSTDIR"
   File "..\publish\win-x64\*.*"
+  ; Virtual Display Driver files (installed later from the app, only after the user agrees to the UAC prompt).
+  SetOutPath "$INSTDIR\vdd"
+  File /nonfatal "..\publish\win-x64\vdd\*.*"
+  SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$DESKTOP\EdgeSpan.lnk" "$INSTDIR\EdgeSpan.exe"
   CreateShortcut "$SMPROGRAMS\EdgeSpan.lnk" "$INSTDIR\EdgeSpan.exe"

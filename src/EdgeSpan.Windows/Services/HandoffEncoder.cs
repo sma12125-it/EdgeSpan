@@ -25,6 +25,8 @@ internal static class WindowEncoder
     /// WGC captures one HWND only, so menus/dropdowns are drawn in by GDI while they are visible.
     /// </summary>
     [ThreadStatic] public static Func<byte[]?>? Overlay;
+    /// <summary>When set (virtual display handoff), capture this whole monitor instead of the window.</summary>
+    [ThreadStatic] public static nint Monitor;
 
     private static readonly Guid H264 = new("34363248-0000-0010-8000-00AA00389B71");
     private static readonly Guid Nv12 = new("3231564E-0000-0010-8000-00AA00389B71");
@@ -79,7 +81,7 @@ internal static class WindowEncoder
             GraphicsCaptureItem item;
             try
             {
-                item = CaptureInterop.CreateItemForWindow(hwnd);
+                item = Monitor != 0 ? CaptureInterop.CreateItemForMonitor(Monitor) : CaptureInterop.CreateItemForWindow(hwnd);
                 DiagLog.Write($"handoff stage GraphicsCaptureItem {item.Size.Width}x{item.Size.Height}");
             }
             catch (Exception ex)
